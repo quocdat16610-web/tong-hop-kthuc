@@ -22,6 +22,13 @@ Vào **[Releases](https://github.com/quocdat16610-web/tong-hop-kthuc/releases)**
 
 Mỗi lần push, GitHub Actions build lại và cập nhật "Bản mới nhất". Push tag dạng `v3.1.0` để tạo bản phát hành có số phiên bản.
 
+### Cập nhật không mất dữ liệu
+
+- Notebook, bài nộp và cài đặt được lưu trong thư mục dữ liệu của người dùng (Windows: `%APPDATA%`, Android: bộ nhớ riêng của app), **không** nằm trong thư mục cài app, nên cài bản mới / cập nhật tự động không đụng tới.
+- Trước mỗi lần tự cập nhật, app tự sao lưu toàn bộ dữ liệu (giữ 5 bản gần nhất). **Cài đặt → Sao lưu tất cả** để lưu ra file; **Notebook → Nhập** để khôi phục (không ghi đè dữ liệu đang có).
+- APK được ký bằng một khoá cố định (`app/android/app/sotaydsa-release.jks`) nên bản mới cài đè lên bản cũ. Bản APK 3.0.0 đầu tiên ký bằng khoá tạm, nên lần đầu chuyển sang bản mới cần **sao lưu → gỡ bản cũ → cài bản mới → nhập lại file sao lưu**.
+- Nội dung bài tập mới từ thư viện được gộp như một nhánh Git: ghi chú của bạn luôn được giữ.
+
 ## Dùng nhanh
 
 1. Mở app → **Sổ hướng dẫn** để xem ví dụ đủ các loại khối, hoặc **Notebook mới**.

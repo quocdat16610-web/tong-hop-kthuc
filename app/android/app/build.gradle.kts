@@ -29,11 +29,21 @@ android {
         versionName = flutter.versionName
     }
 
+    // Ký APK bằng MỘT khoá cố định để bản mới cài đè lên bản cũ (giữ nguyên dữ liệu người dùng).
+    // Có thể thay bằng khoá riêng qua biến môi trường (GitHub Secrets) ANDROID_KEYSTORE_FILE / ANDROID_KEYSTORE_PASSWORD.
+    signingConfigs {
+        create("release") {
+            val envFile = System.getenv("ANDROID_KEYSTORE_FILE")
+            storeFile = if (!envFile.isNullOrEmpty()) file(envFile) else file("sotaydsa-release.jks")
+            storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")?.takeIf { it.isNotEmpty() } ?: "sotaydsa-public"
+            keyAlias = System.getenv("ANDROID_KEY_ALIAS")?.takeIf { it.isNotEmpty() } ?: "sotaydsa"
+            keyPassword = System.getenv("ANDROID_KEY_PASSWORD")?.takeIf { it.isNotEmpty() } ?: storePassword
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }

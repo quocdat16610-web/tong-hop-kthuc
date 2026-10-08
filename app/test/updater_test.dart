@@ -68,4 +68,30 @@ void main() {
     expect(parseLibrary({'notebooks': [{'bundle': {'format': 'khac'}}, 'rác']}), isEmpty);
     expect(parseLibrary('không phải json'), isEmpty);
   });
+
+  test('sao lưu và khôi phục không làm mất dữ liệu', () {
+    final a = Repo.create(title: 'Ghi chú của em', author: 'Em');
+    a.working['pages'] = [page('Trang 1')];
+    a.commit(message: 'Trang 1', author: 'Em');
+    Storage.I.putRepo(a);
+    final backup = Storage.I.exportAll();
+    expect((backup['repos'] as List).any((r) => r['id'] == a.id), isTrue);
+
+    // Sau khi sao lưu, em sửa tiếp trên máy.
+    a.working['pages'] = [page('Trang 1'), {...page('Trang 2'), 'id': 'p2'}];
+    a.commit(message: 'Trang 2', author: 'Em');
+    Storage.I.putRepo(a);
+
+    // Khôi phục bản cũ: không ghi đè trang 2.
+    final r = Storage.I.restoreAll(backup);
+    expect(r.merged, greaterThan(0));
+    final cur = Storage.I.getRepo(a.id)!;
+    expect(pagesOf(cur.working).length, 2);
+
+    // Máy mới (xoá hết) → khôi phục đủ.
+    Storage.I.removeRepo(a.id);
+    final r2 = Storage.I.restoreAll(backup);
+    expect(r2.added, greaterThan(0));
+    expect(pagesOf(Storage.I.getRepo(a.id)!.working).single['title'], 'Trang 1');
+  });
 }

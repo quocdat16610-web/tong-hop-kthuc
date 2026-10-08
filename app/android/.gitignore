@@ -12,3 +12,6 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Khoá ký APK dùng chung cho mọi bản build (để cập nhật cài đè được)
+!/app/sotaydsa-release.jks

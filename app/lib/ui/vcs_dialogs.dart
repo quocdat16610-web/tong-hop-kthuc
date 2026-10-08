@@ -624,7 +624,17 @@ Future<void> handleIncoming(BuildContext context, String text, {void Function(Re
   final app = context.read<AppState>();
   Json bundle;
   try {
-    bundle = Repo.validateBundle(parseIncoming(text));
+    final data = parseIncoming(text);
+    if (data is Map && data['format'] == 'dsa-backup') {
+      if (!await confirmBox(context, 'Khôi phục bản sao lưu?', 'Notebook chưa có sẽ được thêm vào. Notebook đã có giữ nguyên, các thay đổi trong bản sao lưu được thêm thành nhánh "sao-luu/…" để bạn merge nếu cần.', ok: 'Khôi phục')) return;
+      final r = Storage.I.restoreAll(data);
+      app.saveNow();
+      if (app.repo != null) app.openRepo(Storage.I.getRepo(app.repo!.id) ?? app.repo!);
+      app.changed();
+      if (context.mounted) toast(context, 'Đã khôi phục: ${r.added} notebook mới, ${r.merged} notebook đã có được bổ sung.');
+      return;
+    }
+    bundle = Repo.validateBundle(data);
   } catch (e) {
     return toast(context, '$e', error: true);
   }
@@ -765,6 +775,24 @@ Future<void> settingsDialog(BuildContext context) async {
             ),
           ]),
         ],
+        const Divider(height: 28),
+        Text('Sao lưu dữ liệu', style: c.tt.titleSmall),
+        const SizedBox(height: 6),
+        Text('Lưu toàn bộ notebook (cả lịch sử, ảnh, video), bài nộp và file code vào một file. Khôi phục bằng Notebook → Nhập. '
+            'Cập nhật app không xoá dữ liệu; app còn tự sao lưu trước mỗi lần cập nhật.', style: c.tt.bodySmall),
+        const SizedBox(height: 6),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.backup_outlined, size: 18),
+            label: const Text('Sao lưu tất cả…'),
+            onPressed: () {
+              app.saveNow();
+              final d = DateTime.now();
+              saveTextFile(c, 'sao-luu-so-tay-dsa-${d.year}-${d.month}-${d.day}.json', jsonEncode(Storage.I.exportAll()));
+            },
+          ),
+        ),
         const SizedBox(height: 12),
         Text('Dữ liệu lưu tại: ${Storage.I.root.path}', style: c.tt.bodySmall),
       ]);

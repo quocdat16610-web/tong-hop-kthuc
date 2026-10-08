@@ -149,6 +149,67 @@ class Storage {
   }
 }
 
+// ---------- Sao lưu toàn bộ dữ liệu ----------
+extension Backup on Storage {
+  /// Toàn bộ notebook (kèm lịch sử, ảnh/video), bài nộp, file code trong app.
+  Json exportAll() {
+    final repos = listRepos();
+    return {
+      'format': 'dsa-backup',
+      'version': 1,
+      'createdAt': now(),
+      'repos': [for (final r in repos) r.toJson()],
+      'assets': packAssets(Storage.assetRefs([for (final r in repos) r.toJson()])),
+      'subs': subs,
+      'runs': runs,
+      'files': listFiles(),
+    };
+  }
+
+  /// Khôi phục bản sao lưu mà không ghi đè dữ liệu đang có:
+  /// notebook đã có thì nhận các nhánh của bản sao lưu dưới tên "sao-luu/…" để merge khi cần.
+  ({int added, int merged}) restoreAll(Map data) {
+    unpackAssets(data['assets'] as Map?);
+    var added = 0, merged = 0;
+    for (final x in ((data['repos'] ?? const []) as List).whereType<Map>()) {
+      final r = Repo.fromJson(x.cast<String, dynamic>());
+      final cur = getRepo(r.id);
+      if (cur == null) {
+        putRepo(r);
+        added++;
+      } else {
+        r.commits.forEach((id, c) => cur.commits.putIfAbsent(id, () => c));
+        r.branches.forEach((n, id) {
+          if (cur.branches[n] != id) cur.remotes['sao-luu/$n'] = id;
+        });
+        putRepo(cur);
+        merged++;
+      }
+    }
+    final known = {for (final s in subs) jsonEncode(s)};
+    for (final s in ((data['subs'] ?? const []) as List).whereType<Map>()) {
+      if (!known.contains(jsonEncode(s))) addSub(s.cast<String, dynamic>());
+    }
+    for (final f in ((data['files'] ?? const []) as List).whereType<Map>()) {
+      if (!File(p.join(root.path, 'files', '${f['id']}.json')).existsSync()) putFile(f.cast<String, dynamic>());
+    }
+    return (added: added, merged: merged);
+  }
+
+  /// Sao lưu tự động (trước khi cập nhật app), giữ 5 bản gần nhất.
+  File autoBackup(String reason) {
+    final dir = Directory(p.join(root.path, 'backups'))..createSync(recursive: true);
+    final f = File(p.join(dir.path, 'sao-luu-$reason-${now()}.json'))..writeAsStringSync(jsonEncode(exportAll()));
+    final old = dir.listSync().whereType<File>().toList()..sort((a, b) => b.path.compareTo(a.path));
+    for (final x in old.skip(5)) {
+      try {
+        x.deleteSync();
+      } catch (_) {}
+    }
+    return f;
+  }
+}
+
 // ---------- Mã chia sẻ (tương thích với bản cũ: 'z' + base64url(deflate-raw)) ----------
 String encodeShare(Object obj) {
   final bytes = utf8.encode(jsonEncode(obj));

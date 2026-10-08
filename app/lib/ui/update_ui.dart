@@ -209,6 +209,7 @@ Future<void> showUpdateDialog([BuildContext? context]) async {
 
                     tick(0);
                     final f = await download(url, Uri.parse(url).pathSegments.last, tick);
+                    Storage.I.autoBackup('truoc-cap-nhat');
                     status = 'Đang cài đặt, app sẽ tự mở lại…';
                     setSt(() {});
                     svc.app.saveNow();
