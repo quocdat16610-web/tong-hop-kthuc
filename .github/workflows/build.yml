@@ -105,7 +105,7 @@ jobs:
         run: |
           $v = ((Select-String -Path pubspec.yaml -Pattern '^version:').Line -replace 'version:\s*','' -replace '\+.*','')
           New-Item -ItemType Directory -Force ../dist | Out-Null
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$v" "/DSourceDir=$PWD\build\windows\x64\runner\Release" windows/installer/SoTayDSA.iss
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$v" "/DSourceDir=$PWD\build\windows\x64\runner\Release" "/O$PWD\..\dist" windows/installer/SoTayDSA.iss
           Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath "../dist/SoTayDSA-$v-win-x64-portable.zip"
           Get-ChildItem ../dist
       - uses: actions/upload-artifact@v4
