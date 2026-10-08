@@ -11,8 +11,8 @@ Map<String, dynamic>? runNode(String code, String input) {
   if (node.exitCode != 0) return null;
   final dir = Directory.systemTemp.createTempSync('scratch');
   final f = File('${dir.path}/run.js')
-    ..writeAsStringSync('${File('assets/sim_runtime.js').readAsStringSync()}\nprocess.stdout.write(__runSim(${jsonEncode(code)}, ${jsonEncode(input)}));');
-  final r = Process.runSync('node', [f.path]);
+    ..writeAsStringSync('${File('assets/sim_runtime.js').readAsStringSync(encoding: utf8)}\nprocess.stdout.write(__runSim(${jsonEncode(code)}, ${jsonEncode(input)}));');
+  final r = Process.runSync('node', [f.path], stdoutEncoding: utf8, stderrEncoding: utf8);
   dir.deleteSync(recursive: true);
   return jsonDecode(r.stdout as String) as Map<String, dynamic>;
 }
