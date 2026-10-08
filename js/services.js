@@ -15,18 +15,19 @@
 
   // ---------------- IndexedDB ----------------
   const DB_NAME = 'dsa-notebook';
-  const STORES = ['repos', 'assets', 'subs', 'runs'];
-  let dbPromise = null;
+    let dbPromise = null;
   function db() {
     if (!dbPromise)
       dbPromise = new Promise((resolve, reject) => {
-        const req = indexedDB.open(DB_NAME, 2);
+        const req = indexedDB.open(DB_NAME, 3);
         req.onupgradeneeded = () => {
           const d = req.result;
           if (!d.objectStoreNames.contains('repos')) d.createObjectStore('repos', { keyPath: 'id' });
           if (!d.objectStoreNames.contains('assets')) d.createObjectStore('assets', { keyPath: 'hash' });
           if (!d.objectStoreNames.contains('subs')) d.createObjectStore('subs', { keyPath: 'id' });
           if (!d.objectStoreNames.contains('runs')) d.createObjectStore('runs', { keyPath: 'id' });
+          if (!d.objectStoreNames.contains('files')) d.createObjectStore('files', { keyPath: 'id' });
+          if (!d.objectStoreNames.contains('kv')) d.createObjectStore('kv', { keyPath: 'id' });
         };
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => reject(req.error);
@@ -57,6 +58,12 @@
   };
   const Subs = table('subs');
   const Runs = table('runs');
+  const Files = table('files'); // file C++ lưu trong app (Android / khi chưa lưu ra ổ đĩa)
+  const kvT = table('kv');
+  const Kv = {
+    get: async (id, dflt) => { const r = await kvT.get(id); return r ? r.value : dflt; },
+    set: (id, value) => kvT.put({ id, value }),
+  };
 
   // ---------------- Ảnh / video (lưu riêng, tham chiếu bằng "asset:<hash>") ----------------
   const assetsT = table('assets');
@@ -261,5 +268,5 @@
     },
   };
 
-  root.Services = { Platform, Store, Subs, Runs, Assets, Settings, Share, Runner };
+  root.Services = { Platform, Store, Subs, Runs, Files, Kv, Assets, Settings, Share, Runner, postJson };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -23,6 +23,18 @@
     const l = document.getElementById('hljs-light');
     const d = document.getElementById('hljs-dark');
     if (l && d) { l.disabled = dark; d.disabled = !dark; }
+    if (window.IDE) window.IDE.setTheme();
+  }
+  function toggleTheme() {
+    Settings.set('theme', document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+    applyTheme();
+    render();
+  }
+  function setMode(mode) {
+    S.mode = mode;
+    Settings.set('mode', mode);
+    window.scrollTo(0, 0);
+    render();
   }
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { applyTheme(); render(); });
 
@@ -35,7 +47,7 @@
     tab: 'toc',
     search: '',
     tocOpen: window.innerWidth > 900,
-    codeOpen: false,
+    mode: Settings.get('mode') === 'ide' ? 'ide' : 'notes', // 'notes' (sổ tay) | 'ide' (code)
     contest: null,
   };
   const live = new Set(); // mô phỏng / Blockly đang mở, huỷ khi vẽ lại
@@ -67,6 +79,16 @@
   }
 
   CU.init({ S, repo: () => S.repo, snap, saveSoon, render, author, ensureAuthor, readOnly });
+  window.IDE.init({
+    render: () => render(),
+    insertCode: (name, code) => {
+      const page = S.repo && !readOnly() ? curPage() : null;
+      if (!page) return toast('Mở một notebook (chế độ Sổ tay) trước.', true);
+      page.blocks.push({ id: V.newId(12), type: 'code', title: name, code, stdin: '' });
+      saveSoon();
+      toast(`Đã thêm "${name}" vào cuối trang "${page.title}"`);
+    },
+  });
 
   // Bổ sung trường mới cho dữ liệu cũ.
   function normalize(repo) {
@@ -124,13 +146,19 @@
     CU.cleanup();
     closePopover();
     $app.innerHTML = '';
+    document.title = (S.mode === 'ide' ? 'IDE C++' : S.repo ? S.repo.working.title || 'Notebook' : 'Sổ tay DSA C++') + ' — Sổ tay DSA C++';
+    if (S.mode === 'ide') {
+      $app.style.minHeight = '';
+      $app.append(renderTopbar(), window.IDE.view());
+      return;
+    }
     if (!S.repo) {
       $app.style.minHeight = '';
       renderHome();
       return;
     }
-    const layout = h('div', { class: 'layout' + (S.tocOpen ? ' toc-open' : '') + (S.codeOpen ? ' code-open' : '') },
-      renderSidebar(), renderMain(), S.codeOpen ? renderCodePanel() : null);
+    const layout = h('div', { class: 'layout' + (S.tocOpen ? ' toc-open' : '') },
+      renderSidebar(), renderMain());
     $app.append(renderTopbar(), layout);
     updateStatus();
     window.scrollTo(0, y);
@@ -176,7 +204,8 @@
       h('div', { class: 'row' },
         btn('plus', 'Notebook mới', newRepoDialog, { class: 'primary' }),
         btn('upload', 'Mở file / link', importDialog),
-        btn('book', 'Notebook hướng dẫn', () => createRepo('Hướng dẫn sử dụng', materializeBlocks(T.guideSnapshot())))),
+        btn('book', 'Notebook hướng dẫn', () => createRepo('Hướng dẫn sử dụng', materializeBlocks(T.guideSnapshot()))),
+        btn('code', 'Mở IDE C++', () => setMode('ide'))),
       h('h2', { class: 'home-sub' }, 'Notebook trên máy này'),
       repos.length ? list : h('div', { class: 'empty' }, 'Chưa có notebook nào. Tạo mới hoặc mở notebook hướng dẫn để xem thử.')));
   }
@@ -208,8 +237,27 @@
   }
 
   // ---------- Thanh công cụ ----------
+  function modeSwitch() {
+    return h('div', { class: 'seg mode-seg' },
+      h('button', { class: S.mode === 'notes' ? 'on' : '', title: 'Sổ tay ghi chú', onclick: () => setMode('notes') }, icon('book'), h('span', { class: 'lbl' }, 'Sổ tay')),
+      h('button', { class: S.mode === 'ide' ? 'on' : '', title: 'IDE C++ (nhiều tab, build, gỡ lỗi)', onclick: () => setMode('ide') }, icon('code'), h('span', { class: 'lbl' }, 'IDE C++')));
+  }
+  function themeButton() {
+    const dark = document.documentElement.dataset.theme === 'dark';
+    return h('button', { class: 'ghost icon-only', title: dark ? 'Chuyển sang nền sáng' : 'Chuyển sang nền tối', onclick: toggleTheme }, icon(dark ? 'sun' : 'moon', 18));
+  }
+
   function renderTopbar() {
     const r = S.repo;
+    if (S.mode === 'ide' || !r) {
+      return h('header', { class: 'topbar' },
+        r ? null : h('button', { class: 'ghost icon-only', title: 'Danh sách notebook', onclick: () => setMode('notes') }, icon('book', 18)),
+        modeSwitch(),
+        r ? h('span', { class: 'small muted tb-note' }, r.working.title) : null,
+        h('span', { class: 'grow' }),
+        themeButton(),
+        h('button', { class: 'ghost icon-only', title: 'Cài đặt', onclick: settingsDialog }, icon('settings', 18)));
+    }
     const branchSel = h('select', { class: 'branch', title: 'Nhánh hiện tại', onchange: (e) => switchBranch(e.target.value) });
     Object.keys(r.branches).sort().forEach((b) => branchSel.appendChild(h('option', { value: b, selected: b === r.head }, b)));
     branchSel.appendChild(h('option', { value: '__new' }, '+ Nhánh mới…'));
@@ -217,6 +265,7 @@
     return h('header', { class: 'topbar' },
       h('button', { class: 'ghost icon-only', title: 'Mục lục', onclick: () => { S.tocOpen = !S.tocOpen; render(); } }, icon('toc', 18)),
       h('button', { class: 'ghost icon-only', title: 'Danh sách notebook', onclick: goHome }, icon('book', 18)),
+      modeSwitch(),
       h('input', { class: 'tb-title', value: r.working.title, readOnly: readOnly(), title: 'Tên notebook', oninput: (e) => { r.working.title = e.target.value; saveSoon(); } }),
       h('div', { class: 'tb-branch' }, icon('branch'), branchSel),
       h('span', { id: 'status' }),
@@ -226,11 +275,11 @@
         btn('history', 'Lịch sử', historyDialog, { compact: true }),
         btn('merge', 'Merge', () => mergeDialog(), { compact: true })),
       h('div', { class: 'tb-group' },
-        btn('trophy', 'Contest', () => CU.contestsDialog(), { compact: true, class: S.contest ? 'on' : '' }),
-        btn('terminal', 'Khu code', () => { S.codeOpen = !S.codeOpen; render(); }, { compact: true, class: S.codeOpen ? 'on' : '' })),
+        btn('trophy', 'Contest', () => CU.contestsDialog(), { compact: true, class: S.contest ? 'on' : '' })),
       h('div', { class: 'tb-group' },
         btn('share', 'Chia sẻ', shareDialog, { compact: true }),
         btn('upload', 'Nhập', importDialog, { compact: true }),
+        themeButton(),
         h('button', { class: 'ghost icon-only', title: 'Cài đặt', onclick: settingsDialog }, icon('settings', 18))));
   }
 
@@ -734,7 +783,7 @@
         runButton(() => getCode(), () => stdin.value, out),
         btn('copy', 'Sao chép', () => navigator.clipboard.writeText(getCode()).then(() => toast('Đã sao chép')), { class: 'sm ghost' }),
         btn('download', 'Tải .cpp', () => Share.save(slugify((b.title || 'main').replace(/\.cpp$/, '')) + '.cpp', getCode(), 'text/x-c++src'), { class: 'sm ghost' }),
-        btn('terminal', 'Mở ở khu code', () => { setScratch({ code: getCode(), stdin: stdin.value }); S.codeOpen = true; render(); }, { class: 'sm ghost' })),
+        btn('terminal', 'Mở trong IDE', () => { window.IDE.openText(b.title || 'main.cpp', getCode()); setMode('ide'); }, { class: 'sm ghost' })),
       out);
   }
 
@@ -879,37 +928,6 @@
       el.appendChild(h('div', { class: 'blk-kind' }, icon('problem'), 'Bài tập — chế độ tác giả'));
       CU.problemEdit(el, b, change);
     } else CU.problemView(el, b, { anchor: `h-${b.id}` });
-  }
-
-  // ---------- Khu code ----------
-  const scratchKey = () => `scratch:${S.repo.id}`;
-  function getScratch() {
-    try { return JSON.parse(localStorage.getItem(scratchKey()) || '{}'); } catch (_) { return {}; }
-  }
-  function setScratch(v) {
-    try { localStorage.setItem(scratchKey(), JSON.stringify({ ...getScratch(), ...v })); } catch (_) { /* đầy */ }
-  }
-  function renderCodePanel() {
-    const st = getScratch();
-    const ed = codeEditor(st.code || CU.CPP_TEMPLATE, 'cpp', (v) => setScratch({ code: v }));
-    const stdin = h('textarea', { class: 'mono', rows: 4, placeholder: 'stdin', oninput: (e) => setScratch({ stdin: e.target.value }) }, st.stdin || '');
-    const out = h('div', { class: 'cp-out' });
-    return h('aside', { class: 'codepanel' },
-      h('div', { class: 'cp-head' }, icon('terminal'), h('b', { class: 'grow' }, 'Khu code'),
-        h('button', { class: 'ghost icon-only', title: 'Đóng', onclick: () => { S.codeOpen = false; render(); } }, icon('x'))),
-      h('div', { class: 'cp-body' }, ed.el,
-        h('div', { class: 'small muted', style: { margin: '8px 0 4px' } }, 'stdin'), stdin,
-        h('div', { class: 'row', style: { marginTop: '8px' } },
-          runButton(() => ed.getValue(), () => stdin.value, out),
-          readOnly() || S.contest ? null : btn('plus', 'Chèn vào trang', () => {
-            const page = curPage();
-            if (!page) return;
-            page.blocks.push({ id: V.newId(12), type: 'code', title: '', code: ed.getValue(), stdin: stdin.value });
-            saveSoon();
-            render();
-            toast('Đã chèn khối code vào cuối trang');
-          }, { class: 'sm' })),
-        out));
   }
 
   // ===================== Commit =====================
@@ -1318,8 +1336,7 @@
           btn('link', 'Tạo link', async () => {
             const bundle = await makeBundle(picked());
             const code = await Share.encode(bundle);
-            const base = Platform.name === 'web' ? location.origin + location.pathname : 'https://quocdat16610-web.github.io/tong-hop-kthuc/';
-            const link = `${base}#share=${code}`;
+            const link = `sotaydsa://share/${code}`;
             out.innerHTML = '';
             const ta = h('textarea', { class: 'mono', rows: 4, readOnly: true }, link);
             out.append(h('label', { class: 'field' }, `Link (${(link.length / 1024).toFixed(1)} KB)`, ta),
@@ -1351,7 +1368,7 @@
   }
 
   async function parseIncoming(text) {
-    const m = text.match(/#share=([\w-]+)/);
+    const m = text.match(/(?:#share=|sotaydsa:\/\/share\/)([\w-]+)/);
     if (m) return Share.decode(m[1]);
     if (/^[zj][\w-]+$/.test(text)) return Share.decode(text);
     try { return JSON.parse(text); } catch (_) { throw new Error('Không đọc được dữ liệu. Kiểm tra lại file/link.'); }
@@ -1472,6 +1489,15 @@
     else render();
     await checkShareHash();
     window.addEventListener('hashchange', checkShareHash);
+    const openLink = (url) => handleIncoming(url).catch((e) => toast(e.message, true));
+    // Bản máy tính: bấm link sotaydsa://share/… mở thẳng ứng dụng.
+    if (Platform.desktop && Platform.desktop.onOpenShare) Platform.desktop.onOpenShare(openLink);
+    // Bản Android: link mở app qua plugin App của Capacitor.
+    const capApp = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+    if (capApp) {
+      capApp.addListener('appUrlOpen', (e) => e && e.url && openLink(e.url));
+      capApp.getLaunchUrl().then((r) => r && r.url && openLink(r.url)).catch(() => {});
+    }
   }
   boot().catch((e) => {
     $app.innerHTML = '';

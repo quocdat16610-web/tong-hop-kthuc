@@ -50,7 +50,18 @@ async function findCompiler(custom, resourcesPath) {
   return null;
 }
 
-function compile({ source, gpp, flags }) {
+// Header được chèn vào bản build của IDE: tắt bộ đệm stdout để output hiện ngay (console, gỡ lỗi).
+function unbufHeader() {
+  const f = path.join(WORK, 'dsa_unbuffered.h');
+  if (!fs.existsSync(f)) {
+    fs.mkdirSync(WORK, { recursive: true });
+    fs.writeFileSync(f, '#include <cstdio>\nstatic void __attribute__((constructor)) dsa_unbuffered_stdout() { std::setvbuf(stdout, nullptr, _IONBF, 0); }\n');
+  }
+  return f;
+}
+
+// opts: source, gpp, flags, includeDir (thư mục chứa file để #include "x.h"), debug (thêm -g -O0), unbuffered
+function compile({ source, gpp, flags, includeDir, debug, unbuffered }) {
   return new Promise((resolve) => {
     const id = crypto.randomBytes(8).toString('hex');
     const dir = path.join(WORK, id);
@@ -58,7 +69,11 @@ function compile({ source, gpp, flags }) {
     const src = path.join(dir, 'main.cpp');
     const exe = path.join(dir, isWin ? 'main.exe' : 'main');
     fs.writeFileSync(src, source);
-    const args = [...splitFlags(flags || '-O2 -std=c++17'), src, '-o', exe];
+    let base = splitFlags(flags || '-O2 -std=c++17');
+    if (debug) base = [...base.filter((f) => !/^-O/.test(f)), '-g', '-O0'];
+    const args = [...base, src, '-o', exe];
+    if (includeDir && fs.existsSync(includeDir)) args.push('-I', includeDir);
+    if (unbuffered || debug) args.push('-include', unbufHeader());
     // Trên Windows: ngăn xếp lớn như Codeforces (đệ quy sâu không tràn) và liên kết tĩnh (không cần DLL của MinGW).
     if (isWin) args.push('-Wl,--stack,268435456', '-static');
     // Thêm thư mục của g++ vào PATH để tìm được các DLL của MinGW.
@@ -69,7 +84,7 @@ function compile({ source, gpp, flags }) {
         const msg = String(stderr || '').split(src).join('main.cpp') || (err && err.message) || 'Biên dịch thất bại';
         resolve({ ok: false, error: err && err.killed ? 'Biên dịch quá 60 giây.' : msg });
       } else {
-        programs.set(id, { dir, exe, gppDir: path.dirname(gpp) });
+        programs.set(id, { dir, exe, src, gppDir: path.dirname(gpp) });
         resolve({ ok: true, id, warnings: String(stderr || '').split(src).join('main.cpp') });
       }
     });
@@ -119,6 +134,16 @@ function run(id, input, timeLimitMs = 2000) {
   });
 }
 
+// Chạy tương tác (console của IDE): trả về tiến trình con để giao diện gửi input / nhận output dần dần.
+function spawnProgram(id) {
+  const prog = programs.get(id);
+  if (!prog) throw new Error('Chương trình chưa được biên dịch');
+  const env = { ...process.env, PATH: prog.gppDir + path.delimiter + (process.env.PATH || '') };
+  return spawn(prog.exe, [], { cwd: prog.dir, windowsHide: true, env });
+}
+
+const programInfo = (id) => programs.get(id) || null;
+
 function dispose(id) {
   const prog = programs.get(id);
   if (!prog) return;
@@ -131,4 +156,4 @@ function cleanupAll() {
   try { fs.rmSync(WORK, { recursive: true, force: true }); } catch (_) { /* bỏ qua */ }
 }
 
-module.exports = { findCompiler, compile, run, dispose, cleanupAll, splitFlags };
+module.exports = { findCompiler, compile, run, spawnProgram, programInfo, dispose, cleanupAll, splitFlags, WORK };

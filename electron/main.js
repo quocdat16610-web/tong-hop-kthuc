@@ -12,6 +12,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const judge = require('./judge-local');
+const ide = require('./ide');
 
 const ROOT = path.join(__dirname, '..');
 const PORTS = [47821, 47822, 47823, 47824, 47825];
@@ -132,21 +133,40 @@ ipcMain.handle('net:postJson', async (_e, url, body) => {
   return res.json();
 });
 
+const stopIde = ide.register(ipcMain, dialog, BrowserWindow);
+
+// Link chia sẻ dạng sotaydsa://share/<mã> mở thẳng ứng dụng (không cần website).
+const PROTOCOL = 'sotaydsa';
+if (process.defaultApp) app.setAsDefaultProtocolClient(PROTOCOL, process.execPath, [path.resolve(process.argv[1] || '.')]);
+else app.setAsDefaultProtocolClient(PROTOCOL);
+const findLink = (argv) => (argv || []).find((a) => typeof a === 'string' && a.startsWith(PROTOCOL + '://'));
+let pendingLink = findLink(process.argv);
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   let win = null;
-  app.on('second-instance', () => {
+  const deliver = (url) => {
+    if (!url) return;
+    if (win && !win.webContents.isLoading()) win.webContents.send('open-share', url);
+    else pendingLink = url;
+  };
+  app.on('second-instance', (_e, argv) => {
     if (win) {
       if (win.isMinimized()) win.restore();
       win.focus();
     }
+    deliver(findLink(argv));
   });
+  app.on('open-url', (e, url) => { e.preventDefault(); deliver(url); });
   app.whenReady().then(async () => {
     buildMenu();
     try {
       const port = await startServer();
       win = createWindow(port);
+      win.webContents.on('did-finish-load', () => {
+        if (pendingLink) { win.webContents.send('open-share', pendingLink); pendingLink = null; }
+      });
       app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) win = createWindow(port);
       });
@@ -156,6 +176,7 @@ if (!app.requestSingleInstanceLock()) {
     }
   });
   app.on('window-all-closed', () => {
+    stopIde();
     judge.cleanupAll();
     if (process.platform !== 'darwin') app.quit();
   });

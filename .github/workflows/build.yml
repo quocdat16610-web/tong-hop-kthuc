@@ -76,15 +76,15 @@ jobs:
           if ($hash -ne $env:WINLIBS_SHA256) { throw "Sai checksum: $hash" }
           7z x winlibs.zip -obuild-tmp -y | Out-Null
           Move-Item build-tmp/mingw64 build/mingw64
-          # Bỏ các công cụ không cần cho việc biên dịch C++ để bộ cài nhỏ hơn.
-          Remove-Item -Recurse -Force build/mingw64/share, build/mingw64/lib/python3.9
-          Remove-Item -Force build/mingw64/lib/libpython3.9*
+          # Bỏ các công cụ không cần cho việc biên dịch / gỡ lỗi C++ để bộ cài nhỏ hơn (giữ gdb và Python của gdb).
+          Remove-Item -Recurse -Force build/mingw64/share/doc, build/mingw64/share/man, build/mingw64/share/info, build/mingw64/share/locale -ErrorAction SilentlyContinue
+          Remove-Item -Force build/mingw64/lib/libpython3.9.a -ErrorAction SilentlyContinue
           $gccLibexec = Get-ChildItem build/mingw64/libexec/gcc/x86_64-w64-mingw32 | Select-Object -First 1
           Remove-Item -Force (Join-Path $gccLibexec.FullName 'cc1obj.exe'), (Join-Path $gccLibexec.FullName 'cc1objplus.exe'), (Join-Path $gccLibexec.FullName 'f951.exe')
-          $drop = 'lto-dump','doxygen','ctest','cpack','cmake','cmcldeps','gdb','gdb-add-index','gdbserver','cppcheck','gfortran','x86_64-w64-mingw32-gfortran','ctags','optscript','readtags','nasm','ndisasm','yasm','vsyasm','ytasm','ccache','ninja'
+          $drop = 'lto-dump','doxygen','ctest','cpack','cmake','cmcldeps','cppcheck','gfortran','x86_64-w64-mingw32-gfortran','ctags','optscript','readtags','nasm','ndisasm','yasm','vsyasm','ytasm','ccache','ninja'
           foreach ($n in $drop) { Remove-Item -Force -ErrorAction SilentlyContinue "build/mingw64/bin/$n.exe" }
           "{0:N0} MB" -f ((Get-ChildItem build/mingw64 -Recurse | Measure-Object Length -Sum).Sum / 1MB)
-      - name: Kiểm tra g++ đi kèm chạy được
+      - name: Kiểm tra g++ và gdb đi kèm chạy được
         shell: pwsh
         run: |
           Set-Content t.cpp "#include <bits/stdc++.h>`nint main(){ std::vector<long long> v{3,1,2}; std::sort(v.begin(), v.end()); std::cout << v[0] << v[2] << '\n'; }"
@@ -92,11 +92,19 @@ jobs:
           $out = ./t.exe
           if ($out -ne '13') { throw "Kết quả sai: $out" }
           "g++ OK: $out"
+          build/mingw64/bin/gdb.exe --version
+      - name: Kiểm thử (chấm bài, chạy tương tác, gỡ lỗi bằng gdb) với trình biên dịch đi kèm
+        shell: pwsh
+        run: |
+          $env:PATH = "$PWD\build\mingw64\bin;$env:PATH"
+          npm test
       - run: npx electron-builder --win --publish never
       - uses: actions/upload-artifact@v4
         with:
-          name: windows-installer
-          path: dist/*.exe
+          name: windows
+          path: |
+            dist/*.exe
+            dist/*.zip
 
   linux:
     needs: test
@@ -132,8 +140,9 @@ jobs:
           name: macos-dmg
           path: dist/*.dmg
 
+  # Đưa các file cài đặt lên trang Releases để tải trực tiếp (.exe, .apk…), không cần giải nén artifact.
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push'
     needs: [android, windows, linux, macos]
     runs-on: ubuntu-latest
     steps:
@@ -141,6 +150,23 @@ jobs:
         with:
           path: out
           merge-multiple: true
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: out/*
+      - name: Tạo / cập nhật Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          ls -la out
+          cat > notes.md <<EOF
+          Tải file phù hợp với máy của bạn:
+          - **Windows**: \`SoTayDSA-Setup-*.exe\` (bộ cài, có sẵn g++ và gdb) hoặc \`SoTayDSA-*-win-x64.zip\` (giải nén rồi chạy \`SoTayDSA.exe\`, không cần cài)
+          - **Android**: \`SoTayDSA-*-android.apk\`
+          - **Linux**: \`*.AppImage\` · **macOS**: \`*.dmg\`
+
+          Commit: ${GITHUB_SHA}
+          EOF
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            gh release create "$GITHUB_REF_NAME" out/* --title "Sổ tay DSA C++ $GITHUB_REF_NAME" --notes-file notes.md
+          else
+            gh release delete ban-moi-nhat --yes --cleanup-tag || true
+            gh release create ban-moi-nhat out/* --prerelease --target "$GITHUB_SHA" --title "Bản mới nhất (${GITHUB_REF_NAME})" --notes-file notes.md
+          fi

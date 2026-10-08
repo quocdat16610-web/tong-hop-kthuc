@@ -65,6 +65,8 @@
     file: 'M6 3h9l4 4v14H6zM14 3v5h5',
     chevron: 'M9 6l6 6-6 6',
     back: 'M15 6l-6 6 6 6',
+    sun: 'M12 8a4 4 0 1 0 0 8 4 4 0 1 0 0-8M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4',
+    moon: 'M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z',
   };
   function icon(name, size = 16) {
     const span = document.createElement('span');

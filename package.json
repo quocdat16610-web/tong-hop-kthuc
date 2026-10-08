@@ -1,7 +1,7 @@
 {
   "name": "so-tay-dsa-cpp",
   "productName": "So tay DSA C++",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Sổ tay DSA C++: video, ghi chú, code, mô phỏng kéo thả, chấm bài như Codeforces — có nhánh và chia sẻ như GitHub",
   "author": "quocdat16610-web",
   "license": "MIT",
@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "@capacitor/android": "7.6.9",
+    "@capacitor/app": "7.1.2",
     "@capacitor/cli": "7.6.9",
     "@capacitor/core": "7.6.9",
     "@capacitor/filesystem": "7.1.9",
@@ -49,6 +50,12 @@
       "target": [
         {
           "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
           "arch": [
             "x64"
           ]
@@ -91,6 +98,14 @@
       ],
       "category": "public.app-category.education",
       "icon": "build/icon.png"
-    }
+    },
+    "protocols": [
+      {
+        "name": "Sổ tay DSA C++",
+        "schemes": [
+          "sotaydsa"
+        ]
+      }
+    ]
   }
 }
