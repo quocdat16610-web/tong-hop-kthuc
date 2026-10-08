@@ -51,7 +51,9 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter build apk --release --dart-define=GIT_SHA=${{ github.sha }} --dart-define=APP_VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
+      - run: |
+          V=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
+          flutter build apk --release --dart-define=GIT_SHA=${{ github.sha }} --dart-define=APP_VERSION=$V
       - run: |
           V=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
           mkdir -p ../dist && cp build/app/outputs/flutter-apk/app-release.apk "../dist/SoTayDSA-$V-android.apk"
@@ -72,7 +74,9 @@ jobs:
           cache: true
       - run: flutter pub get
       - shell: bash
-        run: flutter build windows --release --dart-define=GIT_SHA=${{ github.sha }} --dart-define=APP_VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
+        run: |
+          V=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
+          flutter build windows --release --dart-define=GIT_SHA=${{ github.sha }} --dart-define=APP_VERSION=$V
       - name: Tải trình biên dịch g++ và gdb (MinGW-w64 / WinLibs) để đóng gói kèm
         shell: pwsh
         run: |
