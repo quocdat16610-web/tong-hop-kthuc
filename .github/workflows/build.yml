@@ -55,7 +55,6 @@ jobs:
           V=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
           # Số bản tăng dần mỗi lần build để Android cài đè bản mới (giữ dữ liệu), ký bằng khoá cố định trong repo.
           flutter build apk --release --build-number=$((100 + ${{ github.run_number }})) --dart-define=GIT_SHA=${{ github.sha }} --dart-define=APP_VERSION=$V
-          keytool -printcert -jarfile build/app/outputs/flutter-apk/app-release.apk | grep -i "owner"
       - run: |
           V=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
           mkdir -p ../dist && cp build/app/outputs/flutter-apk/app-release.apk "../dist/SoTayDSA-$V-android.apk"
