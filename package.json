@@ -1,10 +1,96 @@
 {
   "name": "so-tay-dsa-cpp",
-  "version": "1.0.0",
-  "description": "Sổ tay DSA C++: tổng hợp video, ghi chú, code, mô phỏng — có nhánh và chia sẻ như GitHub",
+  "productName": "So tay DSA C++",
+  "version": "2.0.0",
+  "description": "Sổ tay DSA C++: video, ghi chú, code, mô phỏng kéo thả, chấm bài như Codeforces — có nhánh và chia sẻ như GitHub",
+  "author": "quocdat16610-web",
+  "license": "MIT",
   "private": true,
+  "main": "electron/main.js",
   "scripts": {
-    "start": "python3 -m http.server 8000",
-    "test": "node --test tests/*.test.js"
+    "start": "electron .",
+    "web": "python3 -m http.server 8000",
+    "test": "node --test tests/*.test.js",
+    "build:web": "node scripts/build-web.js",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux",
+    "dist:mac": "electron-builder --mac",
+    "android:sync": "npm run build:web && npx cap sync android"
+  },
+  "devDependencies": {
+    "@capacitor/android": "7.6.9",
+    "@capacitor/cli": "7.6.9",
+    "@capacitor/core": "7.6.9",
+    "@capacitor/filesystem": "7.1.9",
+    "@capacitor/share": "7.0.4",
+    "blockly": "12.5.1",
+    "electron": "42.11.12",
+    "electron-builder": "26.0.12"
+  },
+  "build": {
+    "appId": "io.github.quocdat16610.sotaydsa",
+    "productName": "SoTayDSA",
+    "artifactName": "SoTayDSA-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "index.html",
+      "css/**",
+      "js/**",
+      "vendor/**",
+      "electron/**",
+      "build/icon.png",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "extraResources": [
+        {
+          "from": "build/mingw64",
+          "to": "mingw64",
+          "filter": [
+            "**/*"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "shortcutName": "Sổ tay DSA C++",
+      "artifactName": "SoTayDSA-Setup-${version}.${ext}"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Education",
+      "icon": "build/icon.png"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "category": "public.app-category.education",
+      "icon": "build/icon.png"
+    }
   }
 }

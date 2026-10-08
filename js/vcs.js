@@ -21,7 +21,7 @@
   }
 
   function emptySnapshot(title = 'Notebook mới') {
-    return { title, description: '', pages: [] };
+    return { title, description: '', pages: [], contests: [] };
   }
 
   function createRepo({ title = 'Notebook mới', author = 'Ẩn danh', snapshot } = {}) {
@@ -227,6 +227,13 @@
     a.pages.forEach((p) => {
       if (!pb[p.id]) changes.push({ kind: 'page-removed', page: p });
     });
+    const ca = byId(a.contests);
+    const cb = byId(b.contests);
+    (b.contests || []).forEach((c) => {
+      if (!ca[c.id]) changes.push({ kind: 'contest-added', contest: c });
+      else if (!same(ca[c.id], c)) changes.push({ kind: 'contest-changed', before: ca[c.id], after: c });
+    });
+    (a.contests || []).forEach((c) => !cb[c.id] && changes.push({ kind: 'contest-removed', contest: c }));
     a.pages.forEach((p) => {
       const q = pb[p.id];
       if (!q || same(p, q)) return;
@@ -305,6 +312,22 @@
       result.pages.push(mergePage(b, o, t, conflicts, name));
     });
 
+    // Contest: so sánh nguyên khối theo id.
+    const cb = byId(base.contests);
+    const co = byId(ours.contests);
+    const ct = byId(theirs.contests);
+    result.contests = [];
+    mergeOrder((base.contests || []).map((c) => c.id), (ours.contests || []).map((c) => c.id), (theirs.contests || []).map((c) => c.id)).forEach((cid) => {
+      const B = cb[cid] || null;
+      const O = co[cid] || null;
+      const T = ct[cid] || null;
+      const name = (O || T || B).title || 'contest';
+      const v = pick(B, O, T, () =>
+        conflicts.push({ type: 'contest', target: { contestId: cid }, label: `Contest "${name}"`, base: B, ours: O, theirs: T, theirsIndex: (theirs.contests || []).findIndex((c) => c.id === cid) })
+      );
+      if (v) result.contests.push(v);
+    });
+
     return { snapshot: result, conflicts };
 
     function mergePage(b, o, t, conflicts, name) {
@@ -356,8 +379,8 @@
 
   function blockName(b) {
     if (!b) return '';
-    const map = { markdown: 'ghi chú', video: 'video', code: 'code C++', sim: 'mô phỏng' };
-    const t = b.title || (b.text || '').split('\n')[0].slice(0, 40);
+    const map = { markdown: 'văn bản', heading: 'tiêu đề', image: 'ảnh', video: 'video', code: 'code C++', sim: 'mô phỏng', problem: 'bài tập' };
+    const t = b.title || b.caption || (b.text || '').split('\n')[0].slice(0, 40);
     return `${map[b.type] || b.type}${t ? ` "${t}"` : ''}`;
   }
 
@@ -404,6 +427,13 @@
           if (idx !== -1) snap.pages.splice(idx, 1);
         } else if (idx === -1) snap.pages.splice(Math.min(c.theirsIndex, snap.pages.length), 0, clone(value));
         else snap.pages[idx] = clone(value);
+      } else if (c.type === 'contest') {
+        snap.contests = snap.contests || [];
+        const idx = snap.contests.findIndex((x) => x.id === c.target.contestId);
+        if (value == null) {
+          if (idx !== -1) snap.contests.splice(idx, 1);
+        } else if (idx === -1) snap.contests.splice(Math.min(c.theirsIndex, snap.contests.length), 0, clone(value));
+        else snap.contests[idx] = clone(value);
       } else if (c.type === 'block-delete') {
         const page = snap.pages.find((p) => p.id === pageId);
         if (!page) return;
@@ -473,6 +503,15 @@
     };
   }
 
+  // Tạo gói chỉ có 1 commit từ một snapshot (dùng cho đề thi gửi thí sinh).
+  function bundleFromSnapshot(snapshot, { title, author, repoId } = {}) {
+    const c = { id: newId(), parents: [], message: 'Đề thi', author: author || 'Ẩn danh', time: Date.now(), snapshot: clone(snapshot) };
+    return {
+      format: 'dsa-notebook', version: 1, repoId: repoId || newId(), title: title || snapshot.title,
+      sharedBy: author || 'Ẩn danh', sharedAt: Date.now(), head: 'main', branches: { main: c.id }, commits: { [c.id]: c },
+    };
+  }
+
   function validateBundle(b) {
     if (!b || b.format !== 'dsa-notebook' || typeof b.commits !== 'object' || typeof b.branches !== 'object')
       throw new Error('File không phải notebook DSA hợp lệ.');
@@ -525,7 +564,7 @@
     newId, clone, same, emptySnapshot, createRepo, resolveRef, headCommitId, headSnapshot, isDirty,
     validBranchName, commit, createBranch, checkout, deleteBranch, renameBranch, ancestors, isAncestor,
     mergeBase, log, graphLayout, diffLines, diffSnapshots, summarize, merge3, mergeOrder, applyResolutions,
-    prepareMerge, finishMerge, exportBundle, validateBundle, repoFromBundle, fetchBundle, blockName,
+    prepareMerge, finishMerge, exportBundle, bundleFromSnapshot, validateBundle, repoFromBundle, fetchBundle, blockName,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.VCS = api;

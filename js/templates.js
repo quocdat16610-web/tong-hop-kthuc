@@ -240,55 +240,76 @@ Giới hạn: tối đa 5000 bước, 4 giây chạy. Code chạy trong sandbox 
   // Notebook hướng dẫn — chỉ giải thích cách dùng app, không phải nội dung bài học.
   function guideSnapshot() {
     const id = () => root.VCS.newId(12);
-    const bubble = SIM_TEMPLATES.find((t) => t.id === 'bubble');
+    const B = root.BLOCKS && root.BLOCKS.BLOCK_TEMPLATES[0];
+    const sumProblem = {
+      id: id(), type: 'problem', title: 'Tổng hai số',
+      statement: 'Cho hai số nguyên **a** và **b** (|a|, |b| ≤ 9·10^18). Hãy in ra **a + b**.\n\n### Dữ liệu vào\nMột dòng gồm hai số nguyên `a b`.\n\n### Kết quả\nMột số nguyên là tổng `a + b`.\n\n*Gợi ý: tổng có thể vượt `long long`, hãy dùng `__int128` hoặc xử lý chuỗi.*',
+      timeLimit: 1000, memoryLimit: 256, checker: 'tokens',
+      reference: `#include <bits/stdc++.h>
+using namespace std;
+
+string toStr(__int128 x) {
+    if (x == 0) return "0";
+    bool neg = x < 0; if (neg) x = -x;
+    string s;
+    while (x > 0) { s += char('0' + x % 10); x /= 10; }
+    if (neg) s += '-';
+    reverse(s.begin(), s.end());
+    return s;
+}
+
+int main() {
+    long long a, b;
+    cin >> a >> b;
+    cout << toStr((__int128)a + b) << '\\n';
+}
+`,
+      generator: `#include <bits/stdc++.h>
+using namespace std;
+
+int main() {
+    long long seed;
+    cin >> seed;
+    mt19937_64 rng(seed);
+    long long M = 9000000000000000000LL;
+    auto rnd = [&]() { return (long long)(rng() % (2 * (unsigned long long)M + 1)) - M; };
+    cout << rnd() << ' ' << rnd() << '\\n';
+}
+`,
+      genCount: 10,
+      tests: [
+        { input: '1 2\n', output: '3\n', sample: true },
+        { input: '9000000000000000000 9000000000000000000\n', output: '18000000000000000000\n', sample: true },
+        { input: '-5 3\n', output: '-2\n', sample: false },
+        { input: '-9000000000000000000 -9000000000000000000\n', output: '-18000000000000000000\n', sample: false },
+      ],
+    };
     return {
       title: 'Hướng dẫn sử dụng',
-      description: 'Notebook mẫu giới thiệu các tính năng. Có thể xoá trang này và bắt đầu ghi chú của bạn.',
+      description: 'Notebook mẫu giới thiệu các tính năng. Bạn có thể xoá và bắt đầu ghi chú của mình.',
+      contests: [],
       pages: [
         {
           id: id(),
-          title: 'Bắt đầu',
-          chapter: 'Hướng dẫn',
+          title: 'Hướng dẫn sử dụng',
+          chapter: 'Bắt đầu',
           blocks: [
+            { id: id(), type: 'heading', level: 1, text: 'Cách dùng sổ tay' },
             {
               id: id(),
               type: 'markdown',
-              text: `# Chào mừng 👋
+              text: `Mọi thứ có thể nằm chung **một trang**: tiêu đề, ghi chú, ảnh, video, code, mô phỏng và bài tập. Cột **Mục lục** bên trái tự tạo từ các tiêu đề.
 
-Đây là **sổ ghi chú DSA** — bạn tự tổng hợp video bài giảng, ghi chú, code C++ và mô phỏng thuật toán.
-
-- **Trang** (cột trái) được nhóm theo **chương**. Bấm "+ Trang" để thêm.
-- Mỗi trang gồm các **khối**: 📝 ghi chú (Markdown), 🎬 video, 💻 code C++, ▶️ mô phỏng.
-- Di chuột lên khối để **sửa / di chuyển / xoá**.
-- Mọi thứ tự lưu vào trình duyệt. Khi xong một phần, bấm **Commit** để lưu một phiên bản.
-
-## Nhánh như GitHub
-- Ô **nhánh** trên thanh trên cùng: tạo nhánh mới để thử ghi chú theo cách khác, rồi **Merge** lại.
-- **Lịch sử** xem các commit dạng đồ thị, so sánh thay đổi, khôi phục bản cũ.
-
-## Chia sẻ
-- **Chia sẻ** → xuất file \`.dsanote.json\` hoặc tạo link.
-- Người nhận **Nhập** file/link: mở thành notebook riêng (fork) hoặc gộp vào notebook đang có như nhánh \`tên-người/nhánh\` rồi merge.`,
+- Rê chuột vào khoảng giữa hai khối, bấm **+** để chèn khối mới.
+- Bấm vào biểu tượng **⋮** cạnh khối để sửa, di chuyển, xoá.
+- Kéo thả ảnh hoặc video từ máy vào trang để thêm nhanh.
+- Bấm **Commit** để lưu một phiên bản. Mỗi nhánh là một hướng ghi chú riêng, có thể **Merge** lại.`,
             },
+            { id: id(), type: 'heading', level: 2, text: 'Video bài giảng' },
+            { id: id(), type: 'video', title: 'Dán link YouTube / Google Drive / Facebook… hoặc chọn file video', url: '', timestamps: '00:00 Mở đầu\n05:30 Ví dụ' },
+            { id: id(), type: 'heading', level: 2, text: 'Code C++' },
             {
-              id: id(),
-              type: 'video',
-              title: 'Dán link video bài giảng của bạn vào đây',
-              url: '',
-              timestamps: '00:00 Mở đầu\n05:30 Ví dụ',
-            },
-          ],
-        },
-        {
-          id: id(),
-          title: 'Ví dụ: code + mô phỏng',
-          chapter: 'Hướng dẫn',
-          blocks: [
-            { id: id(), type: 'markdown', text: 'Khối code C++ có nút **Chạy** (biên dịch online qua Compiler Explorer) và ô nhập *stdin*.' },
-            {
-              id: id(),
-              type: 'code',
-              title: 'bubble_sort.cpp',
+              id: id(), type: 'code', title: 'bubble_sort.cpp',
               code: `#include <bits/stdc++.h>
 using namespace std;
 
@@ -304,8 +325,14 @@ int main() {
 }`,
               stdin: '6\n5 1 4 2 8 3',
             },
-            { id: id(), type: 'markdown', text: 'Khối mô phỏng viết bằng JavaScript với thư viện `viz`. Bấm **Sửa** để xem code, **📖 API** để xem các hàm.' },
-            { id: id(), type: 'sim', title: 'Mô phỏng Bubble sort', code: bubble.code, input: bubble.input },
+            { id: id(), type: 'heading', level: 2, text: 'Mô phỏng kéo thả' },
+            { id: id(), type: 'markdown', text: 'Bấm **Sửa** để mở bảng khối kiểu Scratch. Kéo khối từ các nhóm *Mảng*, *Lưới*, *Đồ thị*… rồi bấm **Chạy thử**.' },
+            B
+              ? { id: id(), type: 'sim', mode: 'blocks', title: 'Sắp xếp nổi bọt (kéo thả)', blocksXml: B.xml, blocks: null, code: '', input: B.input }
+              : { id: id(), type: 'sim', mode: 'code', title: 'Sắp xếp nổi bọt', code: SIM_TEMPLATES[1].code, input: SIM_TEMPLATES[1].input },
+            { id: id(), type: 'heading', level: 2, text: 'Bài tập và contest' },
+            { id: id(), type: 'markdown', text: 'Khối **Bài tập** có đề, test, code chuẩn và trình sinh test. Người học nộp bài và được chấm như Codeforces. Bấm **Contest** trên thanh công cụ để gom các bài thành một kỳ thi có giờ và bảng xếp hạng.' },
+            sumProblem,
           ],
         },
       ],
