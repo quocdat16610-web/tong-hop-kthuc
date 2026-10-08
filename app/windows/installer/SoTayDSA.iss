@@ -45,5 +45,10 @@ Root: HKCU; Subkey: "Software\Classes\SoTayDSA.Notebook"; ValueType: string; Val
 Root: HKCU; Subkey: "Software\Classes\SoTayDSA.Notebook\DefaultIcon"; ValueType: string; ValueData: "{app}\SoTayDSA.exe,0"
 Root: HKCU; Subkey: "Software\Classes\SoTayDSA.Notebook\shell\open\command"; ValueType: string; ValueData: """{app}\SoTayDSA.exe"" ""%1"""
 
+; Link chia sẻ sotaydsa://share/... mở thẳng app
+Root: HKCU; Subkey: "Software\Classes\sotaydsa"; ValueType: string; ValueData: "URL:Sổ tay DSA"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\sotaydsa"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
+Root: HKCU; Subkey: "Software\Classes\sotaydsa\shell\open\command"; ValueType: string; ValueData: """{app}\SoTayDSA.exe"" ""%1"""
+
 [Run]
 Filename: "{app}\SoTayDSA.exe"; Description: "{cm:LaunchProgram,Sổ tay DSA C++}"; Flags: nowait postinstall skipifsilent

@@ -58,7 +58,14 @@ Future<void> main(List<String> args) async {
   ));
 
   // Mở file .dsanote.json / .cpp truyền qua dòng lệnh (bấm đúp file trên Windows).
-  final file = args.where((a) => File(a).existsSync()).firstOrNull;
+  final link = args.where((a) => a.startsWith('sotaydsa://')).firstOrNull;
+  if (link != null) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = navKey.currentContext;
+      if (ctx != null) handleIncoming(ctx, link, onOpen: app.openRepo);
+    });
+  }
+  final file = args.where((a) => !a.startsWith('sotaydsa://') && File(a).existsSync()).firstOrNull;
   if (file != null) {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final ctx = navKey.currentContext;
