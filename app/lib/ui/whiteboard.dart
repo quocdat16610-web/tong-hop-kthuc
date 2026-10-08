@@ -180,7 +180,8 @@ class Whiteboard extends StatefulWidget {
   final bool ro;
   final bool fit; // co bảng cho vừa màn hình (chế độ toàn màn hình)
   final VoidCallback? onTapReadOnly;
-  const Whiteboard({super.key, required this.block, required this.ro, this.fit = false, this.onTapReadOnly});
+  final VoidCallback? onChanged; // mặc định: lưu notebook đang mở
+  const Whiteboard({super.key, required this.block, required this.ro, this.fit = false, this.onTapReadOnly, this.onChanged});
   @override
   State<Whiteboard> createState() => _WhiteboardState();
 }
@@ -196,6 +197,7 @@ class _WhiteboardState extends State<Whiteboard> {
 
   void _save() {
     if (!mounted) return;
+    if (widget.onChanged != null) return widget.onChanged!();
     context.read<AppState>().edited();
   }
 

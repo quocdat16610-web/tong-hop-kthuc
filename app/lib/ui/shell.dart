@@ -9,6 +9,7 @@ import '../core/templates.dart';
 import '../core/vcs.dart';
 import 'blocks.dart' as blocks;
 import 'contest.dart';
+import 'board_tab.dart';
 import 'ide.dart';
 import 'notebook_view.dart';
 import 'theme.dart';
@@ -66,6 +67,7 @@ class _ShellState extends State<Shell> {
         },
         const SingleActivator(LogicalKeyboardKey.digit1, alt: true): () => app.mode = 'notes',
         const SingleActivator(LogicalKeyboardKey.digit2, alt: true): () => app.mode = 'ide',
+        const SingleActivator(LogicalKeyboardKey.digit3, alt: true): () => app.mode = 'board',
       };
 
   // ---------- Menu desktop ----------
@@ -109,6 +111,7 @@ class _ShellState extends State<Shell> {
         SubmenuButton(menuChildren: [
           item('Sổ tay', () => a.mode = 'notes', sc: const SingleActivator(LogicalKeyboardKey.digit1, alt: true), icon: Icons.menu_book_outlined),
           item('IDE C++', () => a.mode = 'ide', sc: const SingleActivator(LogicalKeyboardKey.digit2, alt: true), icon: Icons.code),
+          item('Bảng trắng', () => a.mode = 'board', sc: const SingleActivator(LogicalKeyboardKey.digit3, alt: true), icon: Icons.draw_outlined),
           const Divider(),
           item('Giao diện sáng', () => a.setSetting('theme', 'light'), icon: Icons.light_mode_outlined),
           item('Giao diện tối', () => a.setSetting('theme', 'dark'), icon: Icons.dark_mode_outlined),
@@ -122,7 +125,7 @@ class _ShellState extends State<Shell> {
         width: 52,
         decoration: BoxDecoration(color: context.cs.surfaceContainer, border: Border(right: BorderSide(color: context.cs.outlineVariant))),
         child: Column(children: [
-          for (final (m, icon, tip) in [('notes', Icons.menu_book_outlined, 'Sổ tay (Alt+1)'), ('ide', Icons.code, 'IDE C++ (Alt+2)')])
+          for (final (m, icon, tip) in [('notes', Icons.menu_book_outlined, 'Sổ tay (Alt+1)'), ('ide', Icons.code, 'IDE C++ (Alt+2)'), ('board', Icons.draw_outlined, 'Bảng trắng (Alt+3)')])
             Tooltip(
               message: tip,
               child: InkWell(
@@ -266,6 +269,7 @@ class _ShellState extends State<Shell> {
     final a = context.watch<AppState>();
     final compact = context.compact;
     final ide = a.mode == 'ide';
+    final tab = switch (a.mode) { 'ide' => 1, 'board' => 2, _ => 0 };
 
     if (!compact) {
       return CallbackShortcuts(
@@ -280,10 +284,10 @@ class _ShellState extends State<Shell> {
               Expanded(
                 child: Row(children: [
                   _rail(a),
-                  Expanded(child: IndexedStack(index: ide ? 1 : 0, children: [_notesDesktop(a), const IdeView()])),
+                  Expanded(child: IndexedStack(index: tab, children: [_notesDesktop(a), const IdeView(), const BoardTab()])),
                 ]),
               ),
-              if (!ide) _statusBar(a),
+              if (tab == 0) _statusBar(a),
             ]),
           ),
         ),
@@ -294,9 +298,9 @@ class _ShellState extends State<Shell> {
     final has = a.repo != null;
     return Scaffold(
       appBar: AppBar(
-        title: Text(ide ? 'IDE C++' : has ? '${a.repo!.working['title']}' : 'Sổ tay DSA C++', overflow: TextOverflow.ellipsis),
+        title: Text(ide ? 'IDE C++' : tab == 2 ? 'Bảng trắng' : has ? '${a.repo!.working['title']}' : 'Sổ tay DSA C++', overflow: TextOverflow.ellipsis),
         actions: [
-          if (!ide && has) ...[
+          if (tab == 0 && has) ...[
             ValueListenableBuilder<int>(
               valueListenable: a.revision,
               builder: (_, _, _) {
@@ -337,18 +341,19 @@ class _ShellState extends State<Shell> {
           IconButton(tooltip: 'Sáng / tối', onPressed: _toggleTheme, icon: Icon(context.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined)),
         ],
       ),
-      drawer: !ide && has ? Drawer(child: SafeArea(child: Builder(builder: (c) => TocPanel(onNavigate: () => Navigator.pop(c))))) : null,
+      drawer: tab == 0 && has ? Drawer(child: SafeArea(child: Builder(builder: (c) => TocPanel(onNavigate: () => Navigator.pop(c))))) : null,
       body: Column(children: [
         const UpdateBanner(),
-        Expanded(child: IndexedStack(index: ide ? 1 : 0, children: [has ? const NotebookView() : _home(), const IdeView()])),
+        Expanded(child: IndexedStack(index: tab, children: [has ? const NotebookView() : _home(), const IdeView(), const BoardTab()])),
       ]),
       bottomNavigationBar: NavigationBar(
         height: 60,
-        selectedIndex: ide ? 1 : 0,
-        onDestinationSelected: (i) => a.mode = i == 1 ? 'ide' : 'notes',
+        selectedIndex: tab,
+        onDestinationSelected: (i) => a.mode = const ['notes', 'ide', 'board'][i],
         destinations: const [
           NavigationDestination(icon: Icon(Icons.menu_book_outlined), label: 'Sổ tay'),
           NavigationDestination(icon: Icon(Icons.code), label: 'IDE C++'),
+          NavigationDestination(icon: Icon(Icons.draw_outlined), label: 'Bảng trắng'),
         ],
       ),
     );
