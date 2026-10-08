@@ -1,7 +1,7 @@
 name: Build ứng dụng
 
-# Mỗi lần push: chạy test và đóng gói app cho Windows, Linux, macOS, Android.
-# File tải về nằm ở mục "Artifacts" của lượt chạy. Push tag dạng v1.2.3 để tạo Release.
+# Mỗi lần push: chạy test và đóng gói app (Flutter, không dùng web) cho Windows (.exe) và Android (.apk).
+# File cài đặt được đưa lên trang Releases: bản "ban-moi-nhat" (mỗi lần push) hoặc theo tag v1.2.3.
 on:
   push:
     branches: ['**']
@@ -13,92 +13,101 @@ permissions:
   contents: write
 
 env:
+  FLUTTER_VERSION: '3.47.6'
   WINLIBS_URL: https://github.com/brechtsanders/winlibs_mingw/releases/download/14.2.0posix-19.1.1-12.0.0-ucrt-r2/winlibs-x86_64-posix-seh-gcc-14.2.0-mingw-w64ucrt-12.0.0-r2.zip
   WINLIBS_SHA256: D41933CEF13113018418D7B596319C2ED59A567395BBB87AFE27A171E111D553
+
+defaults:
+  run:
+    working-directory: app
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: subosito/flutter-action@v2
         with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-        env:
-          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
-      - run: npm test
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: sudo apt-get update && sudo apt-get install -y gdb
+      - run: flutter pub get
+      - run: flutter analyze --no-fatal-infos
+      - run: flutter test
 
   android:
     needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
-      - run: npm ci
-        env:
-          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
-      - run: npm run build:web && npx cap sync android
-      - name: Build APK
-        working-directory: android
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
-      - run: cp android/app/build/outputs/apk/debug/app-debug.apk "SoTayDSA-$(node -p "require('./package.json').version")-android.apk"
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build apk --release
+      - run: |
+          V=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
+          mkdir -p ../dist && cp build/app/outputs/flutter-apk/app-release.apk "../dist/SoTayDSA-$V-android.apk"
       - uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: SoTayDSA-*-android.apk
+          path: dist/*.apk
 
   windows:
     needs: test
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: subosito/flutter-action@v2
         with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - name: Tải trình biên dịch g++ (MinGW-w64 / WinLibs) để đóng gói kèm
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build windows --release
+      - name: Tải trình biên dịch g++ và gdb (MinGW-w64 / WinLibs) để đóng gói kèm
         shell: pwsh
         run: |
           Invoke-WebRequest $env:WINLIBS_URL -OutFile winlibs.zip
           $hash = (Get-FileHash winlibs.zip -Algorithm SHA256).Hash
           if ($hash -ne $env:WINLIBS_SHA256) { throw "Sai checksum: $hash" }
-          7z x winlibs.zip -obuild-tmp -y | Out-Null
-          Move-Item build-tmp/mingw64 build/mingw64
-          # Bỏ các công cụ không cần cho việc biên dịch / gỡ lỗi C++ để bộ cài nhỏ hơn (giữ gdb và Python của gdb).
-          Remove-Item -Recurse -Force build/mingw64/share/doc, build/mingw64/share/man, build/mingw64/share/info, build/mingw64/share/locale -ErrorAction SilentlyContinue
-          Remove-Item -Force build/mingw64/lib/libpython3.9.a -ErrorAction SilentlyContinue
-          $gccLibexec = Get-ChildItem build/mingw64/libexec/gcc/x86_64-w64-mingw32 | Select-Object -First 1
+          7z x winlibs.zip -owinlibs-tmp -y | Out-Null
+          $m = 'build/windows/x64/runner/Release/mingw64'
+          Move-Item winlibs-tmp/mingw64 $m
+          # Bỏ những thứ không cần cho việc biên dịch / gỡ lỗi C++ để bộ cài nhỏ hơn (giữ gdb và Python của gdb).
+          Remove-Item -Recurse -Force "$m/share/doc", "$m/share/man", "$m/share/info", "$m/share/locale" -ErrorAction SilentlyContinue
+          Remove-Item -Force "$m/lib/libpython3.9.a" -ErrorAction SilentlyContinue
+          $gccLibexec = Get-ChildItem "$m/libexec/gcc/x86_64-w64-mingw32" | Select-Object -First 1
           Remove-Item -Force (Join-Path $gccLibexec.FullName 'cc1obj.exe'), (Join-Path $gccLibexec.FullName 'cc1objplus.exe'), (Join-Path $gccLibexec.FullName 'f951.exe')
           $drop = 'lto-dump','doxygen','ctest','cpack','cmake','cmcldeps','cppcheck','gfortran','x86_64-w64-mingw32-gfortran','ctags','optscript','readtags','nasm','ndisasm','yasm','vsyasm','ytasm','ccache','ninja'
-          foreach ($n in $drop) { Remove-Item -Force -ErrorAction SilentlyContinue "build/mingw64/bin/$n.exe" }
-          "{0:N0} MB" -f ((Get-ChildItem build/mingw64 -Recurse | Measure-Object Length -Sum).Sum / 1MB)
-      - name: Kiểm tra g++ và gdb đi kèm chạy được
+          foreach ($n in $drop) { Remove-Item -Force -ErrorAction SilentlyContinue "$m/bin/$n.exe" }
+          "{0:N0} MB" -f ((Get-ChildItem $m -Recurse | Measure-Object Length -Sum).Sum / 1MB)
+      - name: Chép thư viện Visual C++ để app chạy trên máy chưa cài VC++ Redistributable
         shell: pwsh
         run: |
-          Set-Content t.cpp "#include <bits/stdc++.h>`nint main(){ std::vector<long long> v{3,1,2}; std::sort(v.begin(), v.end()); std::cout << v[0] << v[2] << '\n'; }"
-          build/mingw64/bin/g++.exe -O2 -std=c++17 -static t.cpp -o t.exe
-          $out = ./t.exe
-          if ($out -ne '13') { throw "Kết quả sai: $out" }
-          "g++ OK: $out"
-          build/mingw64/bin/gdb.exe --version
-      - name: Kiểm thử (chấm bài, chạy tương tác, gỡ lỗi bằng gdb) với trình biên dịch đi kèm
+          foreach ($d in 'msvcp140.dll','vcruntime140.dll','vcruntime140_1.dll') { Copy-Item "C:\Windows\System32\$d" build/windows/x64/runner/Release/ }
+      - name: Kiểm thử chấm bài, chạy tương tác và gỡ lỗi với g++/gdb đi kèm
         shell: pwsh
         run: |
-          $env:PATH = "$PWD\build\mingw64\bin;$env:PATH"
-          npm test
-      - run: npx electron-builder --win --publish never
+          $env:PATH = "$PWD\build\windows\x64\runner\Release\mingw64\bin;$env:PATH"
+          g++ --version
+          gdb --version
+          flutter test
+      - name: Đóng gói bộ cài .exe và bản portable .zip
+        shell: pwsh
+        run: |
+          $v = ((Select-String -Path pubspec.yaml -Pattern '^version:').Line -replace 'version:\s*','' -replace '\+.*','')
+          New-Item -ItemType Directory -Force ../dist | Out-Null
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$v" "/DSourceDir=$PWD\build\windows\x64\runner\Release" windows/installer/SoTayDSA.iss
+          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath "../dist/SoTayDSA-$v-win-x64-portable.zip"
+          Get-ChildItem ../dist
       - uses: actions/upload-artifact@v4
         with:
           name: windows
@@ -106,45 +115,14 @@ jobs:
             dist/*.exe
             dist/*.zip
 
-  linux:
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npx electron-builder --linux --publish never
-      - uses: actions/upload-artifact@v4
-        with:
-          name: linux-appimage
-          path: dist/*.AppImage
-
-  macos:
-    needs: test
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npx electron-builder --mac --publish never
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      - uses: actions/upload-artifact@v4
-        with:
-          name: macos-dmg
-          path: dist/*.dmg
-
-  # Đưa các file cài đặt lên trang Releases để tải trực tiếp (.exe, .apk…), không cần giải nén artifact.
+  # Đưa file cài đặt lên trang Releases để tải trực tiếp (.exe, .apk), không cần giải nén artifact.
   release:
     if: github.event_name == 'push'
-    needs: [android, windows, linux, macos]
+    needs: [android, windows]
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -156,14 +134,13 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           ls -la out
-          cat > notes.md <<EOF
-          Tải file phù hợp với máy của bạn:
-          - **Windows**: \`SoTayDSA-Setup-*.exe\` (bộ cài, có sẵn g++ và gdb) hoặc \`SoTayDSA-*-win-x64.zip\` (giải nén rồi chạy \`SoTayDSA.exe\`, không cần cài)
-          - **Android**: \`SoTayDSA-*-android.apk\`
-          - **Linux**: \`*.AppImage\` · **macOS**: \`*.dmg\`
+          cat > notes.md <<NOTES
+          Ứng dụng chạy trực tiếp (không phải website). Tải file phù hợp:
+          - **Windows**: \`SoTayDSA-Setup-*.exe\` (bộ cài, có sẵn g++ và gdb) hoặc \`SoTayDSA-*-win-x64-portable.zip\` (giải nén rồi chạy \`SoTayDSA.exe\`)
+          - **Android**: \`SoTayDSA-*-android.apk\` (code C++ được biên dịch online, cần Internet)
 
           Commit: ${GITHUB_SHA}
-          EOF
+          NOTES
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             gh release create "$GITHUB_REF_NAME" out/* --title "Sổ tay DSA C++ $GITHUB_REF_NAME" --notes-file notes.md
           else
