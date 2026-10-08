@@ -51,7 +51,7 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter build apk --release
+      - run: flutter build apk --release --dart-define=GIT_SHA=${{ github.sha }} --dart-define=APP_VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
       - run: |
           V=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
           mkdir -p ../dist && cp build/app/outputs/flutter-apk/app-release.apk "../dist/SoTayDSA-$V-android.apk"
@@ -71,7 +71,8 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter build windows --release
+      - shell: bash
+        run: flutter build windows --release --dart-define=GIT_SHA=${{ github.sha }} --dart-define=APP_VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
       - name: Tải trình biên dịch g++ và gdb (MinGW-w64 / WinLibs) để đóng gói kèm
         shell: pwsh
         run: |
@@ -124,10 +125,13 @@ jobs:
       run:
         working-directory: .
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: out
           merge-multiple: true
+      - name: Gom thư viện nội dung (content/*.dsanote.json → noi-dung.json)
+        run: python3 app/tool/build_library.py out/noi-dung.json
       - name: Tạo / cập nhật Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -138,6 +142,8 @@ jobs:
           Ứng dụng chạy trực tiếp (không phải website). Tải file phù hợp:
           - **Windows**: \`SoTayDSA-Setup-*.exe\` (bộ cài, có sẵn g++ và gdb) hoặc \`SoTayDSA-*-win-x64-portable.zip\` (giải nén rồi chạy \`SoTayDSA.exe\`)
           - **Android**: \`SoTayDSA-*-android.apk\` (code C++ được biên dịch online, cần Internet)
+
+          App tự kiểm tra bản mới và tự nhận nội dung bài tập mới (\`noi-dung.json\`, gom từ thư mục content/).
 
           Commit: ${GITHUB_SHA}
           NOTES

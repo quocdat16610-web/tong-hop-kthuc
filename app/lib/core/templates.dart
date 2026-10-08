@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart' show rootBundle;
 
+import 'scratch.dart';
+import 'scratch_templates.dart';
 import 'vcs.dart';
 
 const cppTemplate = '''#include <bits/stdc++.h>
@@ -93,7 +95,6 @@ Future<void> loadTemplates() async {
 
 Json guideSnapshot() {
   String id() => newId(12);
-  final bubble = simTemplates.firstWhere((t) => t.id == 'bubble', orElse: () => SimTemplate('x', 'x', '', ''));
   return {
     'title': 'Hướng dẫn sử dụng',
     'description': 'Notebook mẫu giới thiệu các tính năng. Bạn có thể xoá và bắt đầu ghi chú của mình.',
@@ -126,7 +127,14 @@ Json guideSnapshot() {
             'stdin': '6\n5 1 4 2 8 3',
           },
           {'id': id(), 'type': 'heading', 'level': 2, 'text': 'Mô phỏng thuật toán'},
-          {'id': id(), 'type': 'sim', 'mode': 'code', 'title': 'Sắp xếp nổi bọt', 'code': bubble.code, 'input': bubble.input},
+          {
+            'id': id(),
+            'type': 'markdown',
+            'text': 'Mô phỏng được ghép bằng **khối kéo thả** như Scratch: kéo khối từ bảng bên trái vào chương trình, thả khối giá trị vào ô. '
+                'Có sẵn mẫu sắp xếp, tìm kiếm nhị phân, stack, BFS, DFS đệ quy, cây BST. Muốn viết tay thì chuyển sang **Code JS**.',
+          },
+          {'id': id(), 'type': 'sim', 'mode': 'blocks', 'title': 'Sắp xếp nổi bọt (kéo thả)', 'scratch': blockTemplates.first.program(), 'code': generateJs(blockTemplates.first.program()), 'input': blockTemplates.first.input},
+          {'id': id(), 'type': 'sim', 'mode': 'blocks', 'title': 'DFS đệ quy (kéo thả, dùng hàm)', 'scratch': blockTemplates[6].program(), 'code': generateJs(blockTemplates[6].program()), 'input': blockTemplates[6].input},
           {'id': id(), 'type': 'heading', 'level': 2, 'text': 'Bài tập và contest'},
           {
             'id': id(),
@@ -217,23 +225,33 @@ class VideoSource {
   VideoSource(this.kind, this.value, [this.start = 0]);
 }
 
+/// Nhận link video hoặc mã nhúng (<iframe src="…">) và cho biết cách phát.
 VideoSource? parseVideo(String? url) {
   if (url == null || url.trim().isEmpty) return null;
   url = url.trim();
   if (url.startsWith('asset:')) return VideoSource('asset', url);
+  // Mã nhúng: <iframe src="..."> hoặc <video src="..."> → lấy link bên trong.
+  final embed = RegExp('<(?:iframe|video|source|embed)[^>]*\\ssrc\\s*=\\s*["\']([^"\']+)["\']', caseSensitive: false).firstMatch(url);
+  if (embed != null) url = embed.group(1)!.replaceAll('&amp;', '&');
+  if (url.startsWith('//')) url = 'https:$url';
+  if (!url.contains('://') && RegExp(r'^(www\.|m\.)?(youtube\.com|youtu\.be|drive\.google\.com)').hasMatch(url)) url = 'https://$url';
   final u = Uri.tryParse(url);
   if (u == null || !u.hasScheme) return null;
-  final host = u.host.replaceFirst(RegExp(r'^(www|m)\.'), '');
-  if (host == 'youtu.be' || host.endsWith('youtube.com') || host == 'youtube-nocookie.com') {
+  final host = u.host.replaceFirst(RegExp(r'^(www|m|music)\.'), '');
+  if (host == 'youtu.be' || host.endsWith('youtube.com') || host.endsWith('youtube-nocookie.com')) {
     String? id = host == 'youtu.be' ? (u.pathSegments.isNotEmpty ? u.pathSegments.first : null) : u.queryParameters['v'];
     if (id == null) {
-      final m = RegExp(r'^/(embed|shorts|live|v)/([\w-]+)').firstMatch(u.path);
+      final m = RegExp(r'^/(embed|shorts|live|v|e)/([\w-]+)').firstMatch(u.path);
       id = m?.group(2);
     }
     final t = u.queryParameters['t'] ?? u.queryParameters['start'];
-    if (id != null) return VideoSource('youtube', id, t != null ? parseTime(t) : 0);
+    if (id != null && id != 'videoseries') return VideoSource('youtube', id, t != null ? parseTime(t.endsWith('s') && RegExp(r'^\d+s$').hasMatch(t) ? t.substring(0, t.length - 1) : t) : 0);
   }
-  if (RegExp(r'\.(mp4|webm|mov|m4v|mkv)$', caseSensitive: false).hasMatch(u.path)) return VideoSource('file', url);
+  if (host == 'drive.google.com') {
+    final id = RegExp(r'/file/d/([\w-]+)').firstMatch(u.path)?.group(1) ?? u.queryParameters['id'];
+    if (id != null) return VideoSource('drive', id);
+  }
+  if (RegExp(r'\.(mp4|webm|mov|m4v|mkv|m3u8|mp3|m4a)$', caseSensitive: false).hasMatch(u.path)) return VideoSource('file', url);
   if (u.scheme == 'http' || u.scheme == 'https') return VideoSource('link', url);
   return null;
 }

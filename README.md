@@ -2,10 +2,12 @@
 
 Ứng dụng **chạy trực tiếp trên máy** (cửa sổ riêng trên Windows, app trên Android — không phải website) để học Cấu trúc dữ liệu & Giải thuật bằng C++:
 
-- **Sổ tay**: mỗi trang chứa chung tiêu đề, ghi chú (Markdown), ảnh, video (file trên máy hoặc link YouTube xem ngay trong app, có mốc thời gian), code C++ chạy được, mô phỏng thuật toán và bài tập. Cột **Mục lục** tự tạo từ các tiêu đề. Ghi chú do người dùng tự viết.
+- **Sổ tay**: mỗi trang chứa chung tiêu đề, ghi chú (Markdown), ảnh, video (file trên máy, link hoặc mã nhúng `<iframe>` YouTube / Google Drive, link .mp4 — phát ngay trong app, có mốc thời gian), code C++ chạy được, mô phỏng thuật toán và bài tập. Cột **Mục lục** tự tạo từ các tiêu đề. Ghi chú do người dùng tự viết.
 - **Phiên bản như Git**: commit, lịch sử dạng đồ thị, nhánh, merge 3 chiều có giải quyết xung đột, chia sẻ notebook (file `.dsanote.json` hoặc link) để người khác mở thành bản riêng hoặc gộp vào như một nhánh.
 - **IDE C++** kiểu Code::Blocks / Thonny: nhiều tab, mở file/thư mục, Build (Ctrl+F9), Build & Run (F9) với console tương tác, bấm vào lỗi để nhảy tới dòng, **gỡ lỗi từng dòng** bằng gdb (F8 bắt đầu/chạy tiếp, F7 dòng tiếp, Shift+F7 vào hàm, Ctrl+F7 ra khỏi hàm, F5 hoặc bấm lề trái để đặt điểm dừng), xem biến và ngăn xếp lời gọi.
 - **Bài tập & contest kiểu Codeforces**: tác giả viết đề, code chuẩn và trình sinh test — app tự tạo output đúng; người học nộp bài và nhận Accepted / Wrong answer on test N / TLE / RE / CE. Contest có giờ thi và bảng xếp hạng ICPC.
+- **Mô phỏng ghép khối kiểu Scratch**: kéo khối màu từ bảng 12 nhóm (Hiển thị, Dữ liệu vào, Điều khiển, Toán, Chữ, Biến, Danh sách, Mảng vẽ, Stack/Queue, Lưới, Đồ thị/Cây, Hàm) vào chương trình; thả khối giá trị vào ô; vòng lặp, nếu/không thì, biến, hàm có tham số và đệ quy. Có 8 mẫu (sắp xếp nổi bọt/chọn/chèn, tìm kiếm nhị phân, stack ngoặc, BFS lưới, DFS đệ quy, cây BST). Mô phỏng khối của bản cũ tự chuyển sang khối mới.
+- **Tự cập nhật từ GitHub**: app tự kiểm tra bản mới và cài (Windows) / tải APK (Android); **Thư viện bài tập** tự nhận nội dung mới mà tác giả đăng trong thư mục [`content/`](content/README.md) — ai chưa sửa thì cập nhật tự động, ai đã ghi chú thì được mời merge, không mất ghi chú.
 - **Giao diện sáng / tối** (theo hệ thống hoặc chọn tay), menu kiểu ứng dụng Windows; trên điện thoại có thanh điều hướng dưới và mục lục dạng ngăn kéo.
 
 ## Tải về
@@ -28,7 +30,10 @@ Mỗi lần push, GitHub Actions build lại và cập nhật "Bản mới nhấ
 4. **Notebook → Chia sẻ** để lưu file `.dsanote.json` / tạo link; người nhận dùng **Nhập**.
 5. **Alt+2** (hoặc biểu tượng `</>`) để sang IDE; nút **Mở trong IDE** trên khối code và **Đưa vào sổ tay** trong IDE để chuyển code qua lại.
 
-Mô phỏng thuật toán được viết bằng JavaScript nhỏ gọn (có mẫu sẵn: sắp xếp nổi bọt / chèn, tìm kiếm nhị phân, stack kiểm tra ngoặc, BFS trên lưới, DFS, Dijkstra, cây BST) và chạy bằng engine QuickJS tích hợp, vẽ bằng giao diện gốc của app. Trình ghép khối kéo-thả kiểu Scratch của bản HTML cũ đang được làm lại cho bản này; mô phỏng dạng khối cũ vẫn mở được dưới dạng code.
+6. **Mô phỏng**: thêm khối **Mô phỏng** → **Sửa** → kéo khối từ bảng bên trái vào chương trình (bấm vào khối để thêm vào cuối), kéo khối về bảng để xoá, chuột phải để nhân bản; **Toàn màn hình** để có chỗ ghép rộng. Muốn viết tay thì chuyển sang **Code JS**.
+7. **Notebook → Thư viện bài tập (GitHub)** để tải và tự nhận bài tập mới; **Notebook → Kiểm tra cập nhật** để cập nhật app.
+
+Khối kéo thả được dịch sang JavaScript (thư viện `viz`) và chạy bằng engine QuickJS tích hợp, vẽ bằng giao diện gốc của app.
 
 ## Mã nguồn
 
@@ -38,6 +43,8 @@ app/            Ứng dụng Flutter (Dart) — Windows, Android (và Linux/macO
   lib/ui/       Giao diện: khung app, sổ tay, khối nội dung, IDE, hộp thoại Git, contest
   test/         Kiểm thử (merge, chấm bài, chạy tương tác, gỡ lỗi gdb…)
   windows/installer/  Script Inno Setup tạo bộ cài .exe
+  tool/build_library.py  Gom content/*.dsanote.json thành thư viện noi-dung.json (CI chạy)
+content/        Notebook đăng cho mọi người dùng (thư viện bài tập)
 assets-src/     Biểu tượng app
 legacy-html/    Bản cũ (Electron + HTML), giữ để tham khảo; dữ liệu và link chia sẻ của bản cũ vẫn nhập được
 ```

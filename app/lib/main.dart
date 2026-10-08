@@ -13,9 +13,9 @@ import 'core/vcs.dart';
 import 'ui/ide.dart';
 import 'ui/shell.dart';
 import 'ui/theme.dart';
+import 'ui/update_ui.dart';
 import 'ui/vcs_dialogs.dart';
 
-final navKey = GlobalKey<NavigatorState>();
 
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -53,6 +53,7 @@ Future<void> main(List<String> args) async {
     providers: [
       ChangeNotifierProvider.value(value: app),
       ChangeNotifierProvider(create: (_) => IdeModel()),
+      ChangeNotifierProvider(create: (_) => UpdateService(app)..start()),
     ],
     child: const SoTayApp(),
   ));
@@ -102,6 +103,7 @@ class SoTayApp extends StatelessWidget {
         return const Shell();
       }),
       navigatorKey: navKey,
+      scaffoldMessengerKey: messengerKey,
     );
   }
 }

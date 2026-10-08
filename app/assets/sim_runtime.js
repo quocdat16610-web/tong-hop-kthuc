@@ -69,6 +69,22 @@ function simWorkerMain(self) {
       pointer(name, i) { if (i === null || i === undefined) delete this.ptr[name]; else this.ptr[name] = i; dirty = true; }
       push(x) { this.v.push(x); this.hl[this.v.length - 1] = 'set'; tick(`Thêm ${fmt(x)} vào cuối ${this.name}`); }
       pop() { const x = this.v.pop(); delete this.st[this.v.length]; tick(`Lấy ${fmt(x)} ra khỏi cuối ${this.name}`); return x; }
+      insert(i, x) {
+        this.v.splice(i, 0, x);
+        const st = {};
+        Object.keys(this.st).forEach((k) => (st[Number(k) >= i ? Number(k) + 1 : k] = this.st[k]));
+        this.st = st;
+        this.hl[i] = 'set';
+        tick(`Chèn ${fmt(x)} vào ${this.name}[${i}]`);
+      }
+      removeAt(i) {
+        const [x] = this.v.splice(i, 1);
+        const st = {};
+        Object.keys(this.st).forEach((k) => { if (Number(k) !== i) st[Number(k) > i ? Number(k) - 1 : k] = this.st[k]; });
+        this.st = st;
+        tick(`Xoá ${this.name}[${i}] = ${fmt(x)}`);
+        return x;
+      }
       _snap() { return { kind: 'array', name: this.name, v: clone(this.v), st: { ...this.st }, hl: { ...this.hl }, ptr: { ...this.ptr }, bars: this.bars }; }
     }
 
@@ -272,6 +288,11 @@ function simWorkerMain(self) {
         if (dirty || frames.length === 1) frame('Kết thúc');
         else if (!frames[frames.length - 1].note) frames[frames.length - 1].note = 'Kết thúc';
       } catch (e) {
+        if (e === '__stop') {
+          if (dirty) frame('Dừng chương trình');
+          self.postMessage({ frames, logs, error });
+          return;
+        }
         error = String((e && e.message) || e);
         const m = /<anonymous>:(\d+):(\d+)/.exec((e && e.stack) || '');
         if (m) error += ` (dòng ${Number(m[1]) - 3})`;

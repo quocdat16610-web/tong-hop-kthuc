@@ -121,6 +121,9 @@ class _VideoViewState extends State<VideoView> {
           yt.close();
         }
         seek = seek == 0 ? s.start : seek;
+      } else if (s.kind == 'drive') {
+        // File video công khai trên Google Drive: tải luồng trực tiếp.
+        c = VideoPlayerController.networkUrl(Uri.parse('https://drive.usercontent.google.com/download?id=${s.value}&export=download&confirm=t'));
       } else {
         c = VideoPlayerController.networkUrl(Uri.parse(s.value));
       }
@@ -164,7 +167,7 @@ class _VideoViewState extends State<VideoView> {
     if (s == null) {
       player = _placeholder(context, widget.url.isEmpty ? 'Chưa có video.' : 'Link video không hợp lệ.');
     } else if (s.kind == 'link') {
-      player = _placeholder(context, 'Link này không phát trực tiếp được trong app.',
+      player = _placeholder(context, 'Trang video này (${Uri.tryParse(s.value)?.host ?? 'web'}) không cho phát trong app — bấm để mở.',
           action: OutlinedButton.icon(icon: const Icon(Icons.open_in_new), label: const Text('Mở video'), onPressed: () => launchUrl(Uri.parse(s.value), mode: LaunchMode.externalApplication)));
     } else if (ctl != null && ctl!.value.isInitialized) {
       final v = ctl!.value;
@@ -189,7 +192,18 @@ class _VideoViewState extends State<VideoView> {
         aspectRatio: 16 / 9,
         child: Material(
           color: Colors.black,
-          child: InkWell(
+          child: Ink(
+            decoration: s.kind == 'youtube' && error == null && !loading
+                ? BoxDecoration(
+                    image: DecorationImage(
+                      image: NetworkImage('https://i.ytimg.com/vi/${s.value}/hqdefault.jpg'),
+                      fit: BoxFit.cover,
+                      colorFilter: const ColorFilter.mode(Colors.black45, BlendMode.darken),
+                      onError: (_, _) {},
+                    ),
+                  )
+                : null,
+            child: InkWell(
             onTap: loading ? null : () => _start(),
             child: Center(
               child: loading
@@ -200,18 +214,24 @@ class _VideoViewState extends State<VideoView> {
                           child: Column(mainAxisSize: MainAxisSize.min, children: [
                             Text('Không phát được: $error', style: const TextStyle(color: Colors.white70), textAlign: TextAlign.center),
                             const SizedBox(height: 8),
-                            if (s.kind == 'youtube')
-                              OutlinedButton(
-                                onPressed: () => launchUrl(Uri.parse('https://www.youtube.com/watch?v=${s.value}'), mode: LaunchMode.externalApplication),
-                                child: const Text('Mở bằng YouTube'),
-                              ),
+                            Wrap(spacing: 8, children: [
+                              OutlinedButton(onPressed: () => _start(), child: const Text('Thử lại')),
+                              if (s.kind == 'youtube' || s.kind == 'drive')
+                                OutlinedButton(
+                                  onPressed: () => launchUrl(
+                                      Uri.parse(s.kind == 'youtube' ? 'https://www.youtube.com/watch?v=${s.value}' : 'https://drive.google.com/file/d/${s.value}/view'),
+                                      mode: LaunchMode.externalApplication),
+                                  child: Text(s.kind == 'youtube' ? 'Mở bằng YouTube' : 'Mở Google Drive'),
+                                ),
+                            ]),
                           ]),
                         )
                       : Column(mainAxisSize: MainAxisSize.min, children: [
                           const Icon(Icons.play_circle_outline, color: Colors.white, size: 56),
-                          Text(s.kind == 'youtube' ? 'Bấm để phát video YouTube' : 'Bấm để phát', style: const TextStyle(color: Colors.white70)),
+                          Text(s.kind == 'youtube' ? 'Bấm để phát video YouTube' : s.kind == 'drive' ? 'Bấm để phát video Google Drive' : 'Bấm để phát', style: const TextStyle(color: Colors.white)),
                         ]),
             ),
+          ),
           ),
         ),
       );

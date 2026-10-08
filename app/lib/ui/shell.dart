@@ -12,6 +12,7 @@ import 'contest.dart';
 import 'ide.dart';
 import 'notebook_view.dart';
 import 'theme.dart';
+import 'update_ui.dart';
 import 'vcs_dialogs.dart';
 import 'widgets.dart';
 
@@ -86,9 +87,11 @@ class _ShellState extends State<Shell> {
           item('Mở sổ hướng dẫn', _openGuide, icon: Icons.menu_book_outlined),
           const Divider(),
           item('Nhập (file / link)…', () => importDialog(context, onOpen: _open), icon: Icons.download_outlined),
+          item('Thư viện bài tập (GitHub)…', () => showLibraryDialog(context, _open), icon: Icons.cloud_sync_outlined),
           item('Chia sẻ…', has ? () => shareDialog(context) : null, icon: Icons.share_outlined),
           const Divider(),
           item('Cài đặt…', () => settingsDialog(context), icon: Icons.settings_outlined),
+          item('Kiểm tra cập nhật…', () => showUpdateDialog(context), icon: Icons.system_update_alt),
           item('Thoát', () => SystemNavigator.pop(), icon: Icons.exit_to_app),
         ], child: const Text('Notebook')),
         SubmenuButton(menuChildren: [
@@ -197,6 +200,7 @@ class _ShellState extends State<Shell> {
             const SizedBox(height: 16),
             Wrap(spacing: 8, runSpacing: 8, children: [
               FilledButton.icon(onPressed: _newNotebook, icon: const Icon(Icons.add), label: const Text('Notebook mới')),
+              OutlinedButton.icon(onPressed: () => showLibraryDialog(context, _open), icon: const Icon(Icons.cloud_sync_outlined), label: const Text('Thư viện bài tập (GitHub)')),
               OutlinedButton.icon(onPressed: () => importDialog(context, onOpen: _open), icon: const Icon(Icons.download_outlined), label: const Text('Nhập file / link')),
               OutlinedButton.icon(onPressed: _openGuide, icon: const Icon(Icons.menu_book_outlined), label: const Text('Sổ hướng dẫn')),
               OutlinedButton.icon(onPressed: () => app.mode = 'ide', icon: const Icon(Icons.code), label: const Text('Mở IDE C++')),
@@ -271,6 +275,7 @@ class _ShellState extends State<Shell> {
           child: Scaffold(
             body: Column(children: [
               Row(children: [Expanded(child: _menuBar(a))]),
+              const UpdateBanner(),
               Divider(height: 1, color: context.cs.outlineVariant),
               Expanded(
                 child: Row(children: [
@@ -308,6 +313,8 @@ class _ShellState extends State<Shell> {
                 'import' => importDialog(context, onOpen: _open),
                 'contest' => showContestsDialog(context),
                 'list' => Future(a.closeRepo),
+                'library' => showLibraryDialog(context, _open),
+                'update' => showUpdateDialog(context),
                 _ => settingsDialog(context),
               },
               itemBuilder: (_) => [
@@ -318,16 +325,23 @@ class _ShellState extends State<Shell> {
                 const PopupMenuItem(value: 'share', child: Text('Chia sẻ')),
                 const PopupMenuItem(value: 'import', child: Text('Nhập')),
                 const PopupMenuItem(value: 'list', child: Text('Danh sách notebook')),
+                const PopupMenuItem(value: 'library', child: Text('Thư viện bài tập (GitHub)')),
+                const PopupMenuItem(value: 'update', child: Text('Kiểm tra cập nhật')),
                 const PopupMenuItem(value: 'settings', child: Text('Cài đặt')),
               ],
             ),
-          ] else
+          ] else ...[
+            IconButton(tooltip: 'Kiểm tra cập nhật', onPressed: () => showUpdateDialog(context), icon: const Icon(Icons.system_update_alt)),
             IconButton(tooltip: 'Cài đặt', onPressed: () => settingsDialog(context), icon: const Icon(Icons.settings_outlined)),
+          ],
           IconButton(tooltip: 'Sáng / tối', onPressed: _toggleTheme, icon: Icon(context.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined)),
         ],
       ),
       drawer: !ide && has ? Drawer(child: SafeArea(child: Builder(builder: (c) => TocPanel(onNavigate: () => Navigator.pop(c))))) : null,
-      body: IndexedStack(index: ide ? 1 : 0, children: [has ? const NotebookView() : _home(), const IdeView()]),
+      body: Column(children: [
+        const UpdateBanner(),
+        Expanded(child: IndexedStack(index: ide ? 1 : 0, children: [has ? const NotebookView() : _home(), const IdeView()])),
+      ]),
       bottomNavigationBar: NavigationBar(
         height: 60,
         selectedIndex: ide ? 1 : 0,

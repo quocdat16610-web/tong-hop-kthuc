@@ -8,12 +8,15 @@ import 'package:provider/provider.dart';
 import 'package:re_editor/re_editor.dart';
 
 import '../app_state.dart';
+import '../core/scratch.dart';
+import '../core/scratch_templates.dart';
 import '../core/storage.dart';
 import '../core/templates.dart';
 import '../core/vcs.dart';
 import 'code_editor.dart';
 import 'media.dart';
 import 'problem.dart';
+import 'scratch_editor.dart';
 import 'sim_player.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -36,7 +39,7 @@ Json newBlock(String kind) {
     'image' => {'id': id, 'type': 'image', 'src': '', 'caption': '', 'width': 'full'},
     'video' => {'id': id, 'type': 'video', 'title': '', 'url': '', 'timestamps': ''},
     'code' => {'id': id, 'type': 'code', 'title': '', 'code': cppTemplate, 'stdin': ''},
-    'sim' => {'id': id, 'type': 'sim', 'mode': 'code', 'title': '', 'code': simTemplates.isNotEmpty ? simTemplates.first.code : '', 'input': '5 1 4 2 8 3'},
+    'sim' => {'id': id, 'type': 'sim', 'mode': 'blocks', 'title': blockTemplates.first.name, 'scratch': blockTemplates.first.program(), 'code': generateJs(blockTemplates.first.program()), 'input': blockTemplates.first.input},
     _ => {'id': id, 'type': 'problem', ...newProblem()},
   };
   return deepClone(b) as Json;
@@ -360,7 +363,13 @@ class VideoBlock extends StatelessWidget {
       if (editing) ...[
         TextFormField(
           initialValue: url.startsWith('asset:') ? '' : url,
-          decoration: InputDecoration(labelText: 'Link video (YouTube hoặc file .mp4)', hintText: url.startsWith('asset:') ? 'Đang dùng video trên máy' : 'https://www.youtube.com/watch?v=…'),
+          minLines: 1,
+          maxLines: 4,
+          decoration: InputDecoration(
+            labelText: 'Link video hoặc mã nhúng',
+            helperText: 'YouTube (mọi dạng link, cả mã <iframe> nhúng), Google Drive, file .mp4 / .m3u8. Trang khác mở bằng trình duyệt.',
+            hintText: url.startsWith('asset:') ? 'Đang dùng video trên máy' : 'https://www.youtube.com/watch?v=…  hoặc  <iframe src=…>',
+          ),
           onFieldSubmitted: (v) {
             block['url'] = v.trim();
             app.changed();
@@ -577,6 +586,25 @@ class _CodeBlockState extends State<CodeBlock> {
   }
 }
 
+/// Chương trình khối của mô phỏng (tạo mới, hoặc chuyển từ khối Blockly của bản cũ).
+Json simProgram(Json b) {
+  final p = b['scratch'];
+  if (p is Map) return p.cast<String, dynamic>();
+  final legacy = b['blocks'];
+  final Json prog;
+  if (legacy is Map) {
+    try {
+      prog = fromBlockly(legacy);
+    } catch (_) {
+      return b['scratch'] = emptyProgram();
+    }
+  } else {
+    prog = emptyProgram();
+  }
+  b['scratch'] = prog;
+  return prog;
+}
+
 class SimBlock extends StatefulWidget {
   final Json block;
   final bool editing;
@@ -589,20 +617,38 @@ class _SimBlockState extends State<SimBlock> {
   late CodeLineEditingController ctl = CodeLineEditingController.fromText((widget.block['code'] ?? '') as String);
   late final TextEditingController input = TextEditingController(text: (widget.block['input'] ?? '') as String);
   int runKey = 0;
+  bool showBlocks = false;
+  double editorHeight = 460;
 
   Json get b => widget.block;
+  bool get blocksMode => b['mode'] == 'blocks';
 
   @override
   void initState() {
     super.initState();
+    if (blocksMode) {
+      simProgram(b);
+      final code = generateJs(simProgram(b));
+      if (b['code'] != code) b['code'] = code;
+      ctl.text = code;
+    }
     ctl.addListener(_onCode);
   }
 
   void _onCode() {
-    if (b['code'] != ctl.text) {
+    if (!blocksMode && b['code'] != ctl.text) {
       b['code'] = ctl.text;
       context.read<AppState>().edited();
     }
+  }
+
+  void _onBlocks() {
+    final code = generateJs(simProgram(b));
+    b['code'] = code;
+    ctl.removeListener(_onCode);
+    ctl.text = code;
+    ctl.addListener(_onCode);
+    context.read<AppState>().edited();
   }
 
   @override
@@ -612,18 +658,84 @@ class _SimBlockState extends State<SimBlock> {
     super.dispose();
   }
 
+  Future<void> _setMode(String mode) async {
+    if (mode == b['mode']) return;
+    if (mode == 'code') {
+      if (!await confirmBox(context, 'Chuyển sang viết code?', 'Code JavaScript được sinh từ các khối sẽ được giữ lại để bạn sửa tiếp. Sửa code sẽ không cập nhật ngược lại các khối.', ok: 'Chuyển')) return;
+      b['code'] = generateJs(simProgram(b));
+    } else if (b['scratch'] == null && b['blocks'] == null && ctl.text.trim().isNotEmpty) {
+      if (!await confirmBox(context, 'Chuyển sang kéo thả?', 'Code hiện tại không chuyển được thành khối. Bạn sẽ bắt đầu với chương trình khối trống (code cũ vẫn lưu, có thể quay lại).', ok: 'Chuyển')) return;
+    }
+    setState(() {
+      b['mode'] = mode;
+      if (mode == 'blocks') {
+        _onBlocks();
+      } else {
+        ctl.text = (b['code'] ?? '') as String;
+      }
+    });
+    if (mounted) context.read<AppState>().edited();
+  }
+
+  Future<void> _template(String id) async {
+    if (blocksMode) {
+      final t = blockTemplates.firstWhere((x) => x.id == id);
+      final prog = simProgram(b);
+      if (((prog['main'] as List).isNotEmpty || (prog['funcs'] as List).isNotEmpty) &&
+          !await confirmBox(context, 'Thay chương trình?', 'Các khối hiện tại sẽ bị thay bằng mẫu.', ok: 'Thay')) {
+        return;
+      }
+      setState(() {
+        b['scratch'] = t.program();
+        input.text = t.input;
+        b['input'] = t.input;
+        if ((b['title'] ?? '').toString().isEmpty) b['title'] = t.name;
+        _onBlocks();
+        runKey++;
+      });
+      return;
+    }
+    final t = simTemplates.firstWhere((x) => x.id == id);
+    if (ctl.text.trim().isNotEmpty && !await confirmBox(context, 'Thay code?', 'Code mô phỏng hiện tại sẽ bị thay bằng mẫu.', ok: 'Thay')) return;
+    setState(() {
+      ctl.text = t.code;
+      input.text = t.input;
+      b['input'] = t.input;
+      if ((b['title'] ?? '').toString().isEmpty) b['title'] = t.name;
+      runKey++;
+    });
+  }
+
+  Future<void> _fullscreen() async {
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      fullscreenDialog: true,
+      builder: (c) => Scaffold(
+        appBar: AppBar(
+          title: Text((b['title'] ?? '').toString().isEmpty ? 'Ghép khối mô phỏng' : '${b['title']}'),
+          actions: [
+            TextButton.icon(
+              onPressed: () {
+                Navigator.pop(c);
+                setState(() => runKey++);
+              },
+              icon: const Icon(Icons.play_arrow),
+              label: const Text('Xong & chạy thử'),
+            ),
+          ],
+        ),
+        body: ScratchEditor(program: simProgram(b), onChanged: _onBlocks),
+      ),
+    ));
+    if (mounted) setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     final ro = context.read<AppState>().readOnly;
+    final editing = widget.editing && !ro;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      _kind(context, Icons.animation, (b['title'] ?? '').toString().isEmpty ? 'Mô phỏng' : '${b['title']}'),
-      if (b['mode'] == 'blocks' && widget.editing)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Text('Khối kéo thả từ bản cũ đã được chuyển thành code JavaScript để sửa tiếp. Trình kéo thả kiểu Scratch đang được làm lại cho bản này.',
-              style: context.tt.bodySmall?.copyWith(color: warnColor)),
-        ),
-      if (widget.editing) ...[
+      _kind(context, blocksMode ? Icons.extension_outlined : Icons.animation, (b['title'] ?? '').toString().isEmpty ? 'Mô phỏng' : '${b['title']}'),
+      if (editing) ...[
         TextFormField(
           initialValue: (b['title'] ?? '') as String,
           decoration: const InputDecoration(labelText: 'Tiêu đề'),
@@ -632,36 +744,77 @@ class _SimBlockState extends State<SimBlock> {
             context.read<AppState>().edited();
           },
         ),
-        const SizedBox(height: 6),
-        Row(children: [
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'blocks', icon: Icon(Icons.extension_outlined, size: 16), label: Text('Kéo thả')),
+              ButtonSegment(value: 'code', icon: Icon(Icons.code, size: 16), label: Text('Code JS')),
+            ],
+            selected: {blocksMode ? 'blocks' : 'code'},
+            onSelectionChanged: (v) => _setMode(v.first),
+          ),
           DropdownButton<String>(
             hint: const Text('Chèn mẫu…'),
-            items: [for (final t in simTemplates) DropdownMenuItem(value: t.id, child: Text(t.name))],
-            onChanged: (id) async {
-              final t = simTemplates.firstWhere((x) => x.id == id);
-              if (ctl.text.trim().isNotEmpty && !await confirmBox(context, 'Thay code?', 'Code mô phỏng hiện tại sẽ bị thay bằng mẫu.', ok: 'Thay')) return;
-              setState(() {
-                ctl.text = t.code;
-                input.text = t.input;
-                b['input'] = t.input;
-                if ((b['title'] ?? '').toString().isEmpty) b['title'] = t.name;
-                runKey++;
-              });
-            },
+            items: blocksMode
+                ? [for (final t in blockTemplates) DropdownMenuItem(value: t.id, child: Text(t.name))]
+                : [for (final t in simTemplates) DropdownMenuItem(value: t.id, child: Text(t.name))],
+            onChanged: (id) => id == null ? null : _template(id),
           ),
-          const SizedBox(width: 8),
-          TextButton.icon(
-            icon: const Icon(Icons.menu_book_outlined, size: 18),
-            label: const Text('Các hàm viz'),
-            onPressed: () => showPanel<void>(context, title: 'Các hàm mô phỏng (viz)', builder: (_, __) => MarkdownView(simApiDoc), width: 900),
-          ),
+          if (blocksMode)
+            TextButton.icon(icon: const Icon(Icons.fullscreen, size: 18), label: const Text('Toàn màn hình'), onPressed: _fullscreen)
+          else
+            TextButton.icon(
+              icon: const Icon(Icons.menu_book_outlined, size: 18),
+              label: const Text('Các hàm viz'),
+              onPressed: () => showPanel<void>(context, title: 'Các hàm mô phỏng (viz)', builder: (_, _) => MarkdownView(simApiDoc), width: 900),
+            ),
+          if (blocksMode)
+            TextButton.icon(
+              icon: const Icon(Icons.data_object, size: 18),
+              label: const Text('Xem code sinh ra'),
+              onPressed: () => showPanel<void>(context, title: 'Code JavaScript sinh từ khối', builder: (_, _) => MonoBox(ctl.text, maxHeight: 600), width: 900),
+            ),
         ]),
-        Container(
-          height: 320,
-          decoration: BoxDecoration(border: Border.all(color: context.cs.outlineVariant), borderRadius: BorderRadius.circular(4)),
-          child: CodeArea(controller: ctl, lang: 'js'),
-        ),
         const SizedBox(height: 6),
+        if (blocksMode) ...[
+          Container(
+            height: editorHeight,
+            decoration: BoxDecoration(border: Border.all(color: context.cs.outlineVariant), borderRadius: BorderRadius.circular(4)),
+            clipBehavior: Clip.antiAlias,
+            child: ScratchEditor(program: simProgram(b), onChanged: _onBlocks),
+          ),
+          MouseRegion(
+            cursor: SystemMouseCursors.resizeRow,
+            child: GestureDetector(
+              onVerticalDragUpdate: (d) => setState(() => editorHeight = (editorHeight + d.delta.dy).clamp(260.0, 1400.0)),
+              child: Container(height: 8, alignment: Alignment.center, child: Container(width: 40, height: 3, color: context.cs.outlineVariant)),
+            ),
+          ),
+          Text('Kéo khối từ bảng bên trái vào chương trình (bấm vào khối để thêm vào cuối). Kéo khối giá trị (bo tròn / lục giác) vào các ô. Kéo khối về bảng để xoá; chuột phải để nhân bản.',
+              style: context.tt.bodySmall?.copyWith(color: context.cs.onSurfaceVariant)),
+        ] else
+          Container(
+            height: 320,
+            decoration: BoxDecoration(border: Border.all(color: context.cs.outlineVariant), borderRadius: BorderRadius.circular(4)),
+            child: CodeArea(controller: ctl, lang: 'js'),
+          ),
+        const SizedBox(height: 6),
+      ] else if (blocksMode) ...[
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => setState(() => showBlocks = !showBlocks),
+            icon: Icon(showBlocks ? Icons.expand_less : Icons.extension_outlined, size: 18),
+            label: Text(showBlocks ? 'Ẩn các khối' : 'Xem các khối kéo thả'),
+          ),
+        ),
+        if (showBlocks)
+          Container(
+            constraints: const BoxConstraints(maxHeight: 420),
+            decoration: BoxDecoration(border: Border.all(color: context.cs.outlineVariant), borderRadius: BorderRadius.circular(4)),
+            child: ScratchEditor(program: simProgram(b), readOnly: true, onChanged: () {}),
+          ),
       ],
       Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Expanded(
@@ -679,7 +832,7 @@ class _SimBlockState extends State<SimBlock> {
           ),
         ),
         const SizedBox(width: 8),
-        OutlinedButton.icon(onPressed: () => setState(() => runKey++), icon: const Icon(Icons.replay, size: 18), label: Text(widget.editing ? 'Chạy thử' : 'Chạy lại')),
+        FilledButton.tonalIcon(onPressed: () => setState(() => runKey++), icon: const Icon(Icons.play_arrow, size: 18), label: Text(widget.editing ? 'Chạy thử' : 'Chạy lại')),
       ]),
       const SizedBox(height: 8),
       SimPlayer(code: ctl.text, input: input.text, runKey: runKey),

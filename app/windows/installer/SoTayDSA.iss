@@ -24,6 +24,8 @@ SolidCompression=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
+CloseApplications=force
+RestartApplications=no
 
 [Languages]
 Name: "en"; MessagesFile: "compiler:Default.isl"
@@ -52,3 +54,5 @@ Root: HKCU; Subkey: "Software\Classes\sotaydsa\shell\open\command"; ValueType: s
 
 [Run]
 Filename: "{app}\SoTayDSA.exe"; Description: "{cm:LaunchProgram,Sổ tay DSA C++}"; Flags: nowait postinstall skipifsilent
+; Cập nhật tự động (cài im lặng): mở lại app sau khi cài xong
+Filename: "{app}\SoTayDSA.exe"; Flags: nowait runasoriginaluser; Check: WizardSilent
