@@ -19,6 +19,7 @@ import 'problem.dart';
 import 'scratch_editor.dart';
 import 'sim_player.dart';
 import 'theme.dart';
+import 'whiteboard.dart';
 import 'widgets.dart';
 
 const blockTypes = [
@@ -28,6 +29,7 @@ const blockTypes = [
   ('video', 'Video', Icons.smart_display_outlined),
   ('code', 'Code C++', Icons.code),
   ('sim', 'Mô phỏng', Icons.animation),
+  ('board', 'Bảng trắng', Icons.draw_outlined),
   ('problem', 'Bài tập', Icons.assignment_outlined),
 ];
 
@@ -38,6 +40,7 @@ Json newBlock(String kind) {
     'markdown' => {'id': id, 'type': 'markdown', 'text': ''},
     'image' => {'id': id, 'type': 'image', 'src': '', 'caption': '', 'width': 'full'},
     'video' => {'id': id, 'type': 'video', 'title': '', 'url': '', 'timestamps': ''},
+    'board' => {'id': id, 'type': 'board', 'title': '', 'height': 560, 'bg': 'grid', 'strokes': <dynamic>[]},
     'code' => {'id': id, 'type': 'code', 'title': '', 'code': cppTemplate, 'stdin': ''},
     'sim' => {'id': id, 'type': 'sim', 'mode': 'blocks', 'title': blockTemplates.first.name, 'scratch': blockTemplates.first.program(), 'code': generateJs(blockTemplates.first.program()), 'input': blockTemplates.first.input},
     _ => {'id': id, 'type': 'problem', ...newProblem()},
@@ -72,7 +75,7 @@ class BlockFrame extends StatelessWidget {
     final ro = app.readOnly;
     final type = block['type'] as String;
     final editing = !ro && app.editing.contains(block['id']);
-    final framed = const ['video', 'code', 'sim', 'problem'].contains(type);
+    final framed = const ['video', 'code', 'sim', 'problem', 'board'].contains(type);
     final blocks = page['blocks'] as List;
 
     void move(int d) {
@@ -102,6 +105,11 @@ class BlockFrame extends StatelessWidget {
                 case 'h1' || 'h2' || 'h3':
                   block['level'] = int.parse(v.substring(1));
                   app.changed();
+                case 'rename':
+                  final t = await promptBox(context, 'Tên bảng trắng', 'Tên', value: '${block['title'] ?? ''}');
+                  if (t == null) return;
+                  block['title'] = t.trim();
+                  app.changed();
                 case 'up':
                   move(-1);
                 case 'down':
@@ -118,7 +126,8 @@ class BlockFrame extends StatelessWidget {
               }
             },
             itemBuilder: (_) => [
-              if (type != 'heading' && type != 'code') PopupMenuItem(value: 'edit', child: Text(editing ? 'Xong' : 'Sửa')),
+              if (type != 'heading' && type != 'code' && type != 'board') PopupMenuItem(value: 'edit', child: Text(editing ? 'Xong' : 'Sửa')),
+              if (type == 'board') const PopupMenuItem(value: 'rename', child: Text('Đặt tên bảng')),
               if (type == 'heading') ...[
                 const PopupMenuItem(value: 'h1', child: Text('Tiêu đề lớn (H1)')),
                 const PopupMenuItem(value: 'h2', child: Text('Tiêu đề vừa (H2)')),
@@ -138,6 +147,7 @@ class BlockFrame extends StatelessWidget {
       'image' => ImageBlock(key: ValueKey('i${block['id']}'), block: block, editing: editing),
       'video' => VideoBlock(key: ValueKey('v${block['id']}'), block: block, editing: editing),
       'code' => CodeBlock(key: ValueKey('c${block['id']}'), block: block, ro: ro),
+      'board' => WhiteboardBlock(key: ValueKey('w${block['id']}'), block: block, ro: ro),
       'sim' => SimBlock(key: ValueKey('s${block['id']}'), block: block, editing: editing),
       'problem' => editing ? ProblemEditor(key: ValueKey('pe${block['id']}'), block: block) : ProblemView(key: ValueKey('pv${block['id']}'), block: block),
       _ => Text('Loại khối chưa hỗ trợ: $type'),

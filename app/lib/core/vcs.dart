@@ -482,7 +482,7 @@ List<Change> diffSnapshots(Json? a, Json? b) {
 
 String blockName(Json? b) {
   if (b == null) return '';
-  const map = {'markdown': 'văn bản', 'heading': 'tiêu đề', 'image': 'ảnh', 'video': 'video', 'code': 'code C++', 'sim': 'mô phỏng', 'problem': 'bài tập'};
+  const map = {'markdown': 'văn bản', 'heading': 'tiêu đề', 'image': 'ảnh', 'video': 'video', 'code': 'code C++', 'sim': 'mô phỏng', 'problem': 'bài tập', 'board': 'bảng trắng'};
   String t = (b['title'] ?? b['caption'] ?? '') as String;
   if (t.isEmpty) {
     final text = (b['text'] ?? '') as String;

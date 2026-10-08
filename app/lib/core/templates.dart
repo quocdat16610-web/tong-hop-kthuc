@@ -135,6 +135,7 @@ Json guideSnapshot() {
           },
           {'id': id(), 'type': 'sim', 'mode': 'blocks', 'title': 'Sắp xếp nổi bọt (kéo thả)', 'scratch': blockTemplates.first.program(), 'code': generateJs(blockTemplates.first.program()), 'input': blockTemplates.first.input},
           {'id': id(), 'type': 'sim', 'mode': 'blocks', 'title': 'DFS đệ quy (kéo thả, dùng hàm)', 'scratch': blockTemplates[6].program(), 'code': generateJs(blockTemplates[6].program()), 'input': blockTemplates[6].input},
+          ...whiteboardDemo(id),
           {'id': id(), 'type': 'heading', 'level': 2, 'text': 'Bài tập và contest'},
           {
             'id': id(),
@@ -255,3 +256,30 @@ VideoSource? parseVideo(String? url) {
   if (u.scheme == 'http' || u.scheme == 'https') return VideoSource('link', url);
   return null;
 }
+
+/// Phần "Bảng trắng" trong sổ hướng dẫn: hình minh hoạ mảng và hai con trỏ.
+List<Json> whiteboardDemo(String Function() id) {
+  List<num> box(num x, num y) => [x, y, x + 70, y + 60];
+  final strokes = <Json>[
+    for (var i = 0; i < 6; i++) {'t': 'rect', 'c': 0xFF1F2328, 'w': 3, 'p': box(160 + i * 80, 160)},
+    for (var i = 0; i < 6; i++) {'t': 'text', 'c': 0xFF1F2328, 'w': 4, 'p': [185 + i * 80, 172], 'text': '${[1, 3, 5, 7, 9, 11][i]}'},
+    for (var i = 0; i < 6; i++) {'t': 'text', 'c': 0xFF6E7781, 'w': 2, 'p': [190 + i * 80, 228], 'text': '$i'},
+    {'t': 'arrow', 'c': 0xFF0969DA, 'w': 3, 'p': [195, 330, 195, 255]},
+    {'t': 'text', 'c': 0xFF0969DA, 'w': 4, 'p': [185, 340], 'text': 'l'},
+    {'t': 'arrow', 'c': 0xFFCF222E, 'w': 3, 'p': [595, 330, 595, 255]},
+    {'t': 'text', 'c': 0xFFCF222E, 'w': 4, 'p': [585, 340], 'text': 'r'},
+    {'t': 'highlighter', 'c': 0xFFBF8700, 'w': 3, 'p': [160, 140, 300, 138, 450, 140, 630, 138]},
+    {'t': 'text', 'c': 0xFF1A7F37, 'w': 4, 'p': [160, 60], 'text': 'Hai con trỏ: tìm cặp có tổng = 12'},
+  ];
+  return [
+    {'id': id(), 'type': 'heading', 'level': 2, 'text': 'Bảng trắng'},
+    {
+      'id': id(),
+      'type': 'markdown',
+      'text': 'Khối **Bảng trắng** để vẽ tay minh hoạ thuật toán: bút, bút dạ, đường thẳng, mũi tên, hình chữ nhật, hình tròn, chữ, tẩy, hoàn tác. '
+          'Nét vẽ được lưu trong notebook nên cũng có lịch sử, commit và chia sẻ như các nội dung khác.',
+    },
+    {'id': id(), 'type': 'board', 'title': 'Hai con trỏ trên mảng đã sắp xếp', 'height': 420, 'bg': 'grid', 'strokes': strokes},
+  ];
+}
+

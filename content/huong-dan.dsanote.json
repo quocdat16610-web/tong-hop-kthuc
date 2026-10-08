@@ -4,12 +4,816 @@
  "repoId": "3bbb2eefeb707987",
  "title": "Hướng dẫn sử dụng",
  "sharedBy": "Sổ tay DSA",
- "sharedAt": 1791473335208,
+ "sharedAt": 1791475524565,
  "head": "main",
  "branches": {
-  "main": "96c01d7823c94e89"
+  "main": "092c53990efb7d91"
  },
  "commits": {
+  "092c53990efb7d91": {
+   "id": "092c53990efb7d91",
+   "parents": [
+    "96c01d7823c94e89"
+   ],
+   "message": "Thêm phần Bảng trắng",
+   "author": "Sổ tay DSA",
+   "time": 1791475524560,
+   "snapshot": {
+    "title": "Hướng dẫn sử dụng",
+    "description": "Notebook mẫu giới thiệu các tính năng. Bạn có thể xoá và bắt đầu ghi chú của mình.",
+    "contests": [],
+    "pages": [
+     {
+      "id": "b05a2a337421",
+      "title": "Hướng dẫn sử dụng",
+      "chapter": "Bắt đầu",
+      "blocks": [
+       {
+        "id": "bcac8c37998e",
+        "type": "heading",
+        "level": 1,
+        "text": "Cách dùng sổ tay"
+       },
+       {
+        "id": "61039e102d3d",
+        "type": "markdown",
+        "text": "Mọi thứ có thể nằm chung **một trang**: tiêu đề, ghi chú, ảnh, video, code, mô phỏng và bài tập. Cột **Mục lục** bên trái tự tạo từ các tiêu đề.\n\n- Bấm **+** giữa hai khối hoặc thanh *Thêm khối* cuối trang để chèn khối mới.\n- Bấm nút **⋮** ở góc khối để sửa, di chuyển, xoá.\n- Bấm **Commit** (Ctrl+S) để lưu một phiên bản. Mỗi nhánh là một hướng ghi chú riêng, có thể **Merge** lại.\n- Chuyển sang **IDE C++** ở thanh bên trái để lập trình với nhiều tab, Build/Chạy (F9) và gỡ lỗi (F8)."
+       },
+       {
+        "id": "47485baa67bc",
+        "type": "heading",
+        "level": 2,
+        "text": "Video bài giảng"
+       },
+       {
+        "id": "cd96670b60b8",
+        "type": "video",
+        "title": "Dán link YouTube hoặc chọn file video trên máy",
+        "url": "",
+        "timestamps": "00:00 Mở đầu\n05:30 Ví dụ"
+       },
+       {
+        "id": "e348005954af",
+        "type": "heading",
+        "level": 2,
+        "text": "Code C++"
+       },
+       {
+        "id": "e9f86a5f64ea",
+        "type": "code",
+        "title": "bubble_sort.cpp",
+        "code": "#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    int n; cin >> n;\n    vector<int> a(n);\n    for (int &x : a) cin >> x;\n    for (int i = 0; i < n - 1; i++)\n        for (int j = 0; j < n - 1 - i; j++)\n            if (a[j] > a[j + 1]) swap(a[j], a[j + 1]);\n    for (int x : a) cout << x << ' ';\n    cout << '\\n';\n}",
+        "stdin": "6\n5 1 4 2 8 3"
+       },
+       {
+        "id": "a76278649283",
+        "type": "heading",
+        "level": 2,
+        "text": "Mô phỏng thuật toán"
+       },
+       {
+        "id": "4e396a838b98",
+        "type": "markdown",
+        "text": "Mô phỏng được ghép bằng **khối kéo thả** như Scratch: kéo khối từ bảng bên trái vào chương trình, thả khối giá trị vào ô. Có sẵn mẫu sắp xếp, tìm kiếm nhị phân, stack, BFS, DFS đệ quy, cây BST. Muốn viết tay thì chuyển sang **Code JS**."
+       },
+       {
+        "id": "1672c4ea1976",
+        "type": "sim",
+        "mode": "blocks",
+        "title": "Sắp xếp nổi bọt (kéo thả)",
+        "scratch": {
+         "v": 2,
+         "vars": [
+          "a",
+          "i",
+          "j"
+         ],
+         "funcs": [],
+         "main": [
+          {
+           "op": "array_create",
+           "a": {
+            "VAR": "a",
+            "LIST": {
+             "op": "read_numbers",
+             "a": {}
+            },
+            "STYLE": "bars"
+           }
+          },
+          {
+           "op": "for",
+           "a": {
+            "VAR": "i",
+            "FROM": "0",
+            "TO": {
+             "op": "arith",
+             "a": {
+              "A": {
+               "op": "array_len",
+               "a": {
+                "VAR": "a"
+               }
+              },
+              "OP": "-",
+              "B": "2"
+             }
+            },
+            "BY": "1"
+           },
+           "do": [
+            {
+             "op": "for",
+             "a": {
+              "VAR": "j",
+              "FROM": "0",
+              "TO": {
+               "op": "arith",
+               "a": {
+                "A": {
+                 "op": "arith",
+                 "a": {
+                  "A": {
+                   "op": "array_len",
+                   "a": {
+                    "VAR": "a"
+                   }
+                  },
+                  "OP": "-",
+                  "B": "2"
+                 }
+                },
+                "OP": "-",
+                "B": {
+                 "op": "var_get",
+                 "a": {
+                  "VAR": "i"
+                 }
+                }
+               }
+              },
+              "BY": "1"
+             },
+             "do": [
+              {
+               "op": "array_pointer",
+               "a": {
+                "NAME": "j",
+                "VAR": "a",
+                "I": {
+                 "op": "var_get",
+                 "a": {
+                  "VAR": "j"
+                 }
+                }
+               }
+              },
+              {
+               "op": "if",
+               "a": {
+                "COND": {
+                 "op": "array_compare",
+                 "a": {
+                  "VAR": "a",
+                  "I": {
+                   "op": "var_get",
+                   "a": {
+                    "VAR": "j"
+                   }
+                  },
+                  "OP": ">",
+                  "J": {
+                   "op": "arith",
+                   "a": {
+                    "A": {
+                     "op": "var_get",
+                     "a": {
+                      "VAR": "j"
+                     }
+                    },
+                    "OP": "+",
+                    "B": "1"
+                   }
+                  }
+                 }
+                }
+               },
+               "do": [
+                {
+                 "op": "array_swap",
+                 "a": {
+                  "VAR": "a",
+                  "I": {
+                   "op": "var_get",
+                   "a": {
+                    "VAR": "j"
+                   }
+                  },
+                  "J": {
+                   "op": "arith",
+                   "a": {
+                    "A": {
+                     "op": "var_get",
+                     "a": {
+                      "VAR": "j"
+                     }
+                    },
+                    "OP": "+",
+                    "B": "1"
+                   }
+                  }
+                 }
+                }
+               ]
+              }
+             ]
+            },
+            {
+             "op": "array_mark",
+             "a": {
+              "VAR": "a",
+              "I": {
+               "op": "arith",
+               "a": {
+                "A": {
+                 "op": "arith",
+                 "a": {
+                  "A": {
+                   "op": "array_len",
+                   "a": {
+                    "VAR": "a"
+                   }
+                  },
+                  "OP": "-",
+                  "B": "1"
+                 }
+                },
+                "OP": "-",
+                "B": {
+                 "op": "var_get",
+                 "a": {
+                  "VAR": "i"
+                 }
+                }
+               }
+              },
+              "COLOR": "done"
+             }
+            }
+           ]
+          },
+          {
+           "op": "array_mark",
+           "a": {
+            "VAR": "a",
+            "I": "0",
+            "COLOR": "done"
+           }
+          },
+          {
+           "op": "array_unpointer",
+           "a": {
+            "NAME": "j",
+            "VAR": "a"
+           }
+          },
+          {
+           "op": "step",
+           "a": {
+            "X": "Đã sắp xếp xong"
+           }
+          }
+         ]
+        },
+        "code": "// Code sinh tự động từ các khối kéo thả\nconst __show = (n, x) => { if (['number', 'string', 'boolean'].includes(typeof x)) viz.var(n, x); };\nconst __list = (x) => (Array.isArray(x) ? x : x && typeof x.values === \"function\" ? x.values() : typeof x === \"string\" ? x.split(\"\") : []);\nlet v_a = 0, v_i = 0, v_j = 0;\nv_a = viz.array(__list((readNumbers())), { name: \"a\", bars: true });\n{\n  const __t1 = 1, __t2 = ((v_a.length) - 2);\n  for (v_i = 0; __t1 >= 0 ? v_i <= __t2 : v_i >= __t2; v_i += __t1) {\n    __show(\"i\", v_i);\n    {\n      const __t3 = 1, __t4 = (((v_a.length) - 2) - (v_i));\n      for (v_j = 0; __t3 >= 0 ? v_j <= __t4 : v_j >= __t4; v_j += __t3) {\n        __show(\"j\", v_j);\n        v_a.pointer(\"j\", (v_j));\n        if ((v_a.compare((v_j), ((v_j) + 1)) > 0)) {\n          v_a.swap((v_j), ((v_j) + 1));\n        }\n      }\n    }\n    v_a.mark((((v_a.length) - 1) - (v_i)), \"done\");\n  }\n}\nv_a.mark(0, \"done\");\nv_a.pointer(\"j\", null);\nviz.step(String(\"Đã sắp xếp xong\"));\n",
+        "input": "5 1 4 2 8 3"
+       },
+       {
+        "id": "84dddf1d8947",
+        "type": "sim",
+        "mode": "blocks",
+        "title": "DFS đệ quy (kéo thả, dùng hàm)",
+        "scratch": {
+         "v": 2,
+         "vars": [
+          "G",
+          "da",
+          "v",
+          "u"
+         ],
+         "funcs": [
+          {
+           "name": "dfs",
+           "params": [
+            "u"
+           ],
+           "body": [
+            {
+             "op": "list_push",
+             "a": {
+              "VAR": "da",
+              "X": {
+               "op": "var_get",
+               "a": {
+                "VAR": "u"
+               }
+              }
+             }
+            },
+            {
+             "op": "graph_visit",
+             "a": {
+              "VAR": "G",
+              "N": {
+               "op": "var_get",
+               "a": {
+                "VAR": "u"
+               }
+              },
+              "COLOR": "visited"
+             }
+            },
+            {
+             "op": "foreach",
+             "a": {
+              "VAR": "v",
+              "LIST": {
+               "op": "graph_neighbors",
+               "a": {
+                "VAR": "G",
+                "N": {
+                 "op": "var_get",
+                 "a": {
+                  "VAR": "u"
+                 }
+                }
+               }
+              }
+             },
+             "do": [
+              {
+               "op": "if",
+               "a": {
+                "COND": {
+                 "op": "not",
+                 "a": {
+                  "A": {
+                   "op": "list_has",
+                   "a": {
+                    "L": {
+                     "op": "var_get",
+                     "a": {
+                      "VAR": "da"
+                     }
+                    },
+                    "X": {
+                     "op": "var_get",
+                     "a": {
+                      "VAR": "v"
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               },
+               "do": [
+                {
+                 "op": "graph_edge",
+                 "a": {
+                  "VAR": "G",
+                  "U": {
+                   "op": "var_get",
+                   "a": {
+                    "VAR": "u"
+                   }
+                  },
+                  "W": {
+                   "op": "var_get",
+                   "a": {
+                    "VAR": "v"
+                   }
+                  },
+                  "COLOR": "path"
+                 }
+                },
+                {
+                 "op": "call",
+                 "a": {
+                  "FN": "dfs",
+                  "P0": {
+                   "op": "var_get",
+                   "a": {
+                    "VAR": "v"
+                   }
+                  }
+                 }
+                }
+               ]
+              }
+             ]
+            },
+            {
+             "op": "graph_visit",
+             "a": {
+              "VAR": "G",
+              "N": {
+               "op": "var_get",
+               "a": {
+                "VAR": "u"
+               }
+              },
+              "COLOR": "done"
+             }
+            }
+           ]
+          }
+         ],
+         "main": [
+          {
+           "op": "graph_create",
+           "a": {
+            "VAR": "G",
+            "LIST": {
+             "op": "read_numbers",
+             "a": {}
+            },
+            "K": "2",
+            "DIR": "false"
+           }
+          },
+          {
+           "op": "var_set",
+           "a": {
+            "VAR": "da",
+            "X": {
+             "op": "list_new",
+             "a": {}
+            }
+           }
+          },
+          {
+           "op": "call",
+           "a": {
+            "FN": "dfs",
+            "P0": {
+             "op": "input_k",
+             "a": {
+              "K": "0"
+             }
+            }
+           }
+          },
+          {
+           "op": "step",
+           "a": {
+            "X": {
+             "op": "join",
+             "a": {
+              "A": "Thứ tự thăm: ",
+              "B": {
+               "op": "list_text",
+               "a": {
+                "L": {
+                 "op": "var_get",
+                 "a": {
+                  "VAR": "da"
+                 }
+                }
+               }
+              }
+             }
+            }
+           }
+          }
+         ]
+        },
+        "code": "// Code sinh tự động từ các khối kéo thả\nconst __show = (n, x) => { if (['number', 'string', 'boolean'].includes(typeof x)) viz.var(n, x); };\nconst __list = (x) => (Array.isArray(x) ? x : x && typeof x.values === \"function\" ? x.values() : typeof x === \"string\" ? x.split(\"\") : []);\nlet v_G = 0, v_da = 0, v_v = 0, v_u = 0;\nfunction f_dfs(v_u) {\n  v_da.push((v_u));\n  v_G.visit((v_u), \"visited\");\n  for (v_v of __list((v_G.neighbors((v_u))))) {\n    __show(\"v\", v_v);\n    if ((!(__list((v_da)).includes((v_v))))) {\n      v_G.edge((v_u), (v_v), \"path\");\n      f_dfs((v_v));\n    }\n  }\n  v_G.visit((v_u), \"done\");\n}\n{\n  const __t1 = __list((readNumbers())), e = [];\n  for (let i = 0; i + 2 <= __t1.length; i += 2) e.push(__t1.slice(i, i + 2));\n  v_G = viz.graph({ edges: e, directed: false, name: \"G\" });\n}\nv_da = ([]);\n__show(\"da\", v_da);\nf_dfs((readNumbers()[0]));\nviz.step(String((String(\"Thứ tự thăm: \") + String((__list((v_da)).join(' '))))));\n",
+        "input": "1 2 1 3 2 4 2 5 3 6 5 6"
+       },
+       {
+        "id": "wb01791475524555586",
+        "type": "heading",
+        "level": 2,
+        "text": "Bảng trắng"
+       },
+       {
+        "id": "wb11791475524555629",
+        "type": "markdown",
+        "text": "Khối **Bảng trắng** để vẽ tay minh hoạ thuật toán: bút, bút dạ, đường thẳng, mũi tên, hình chữ nhật, hình tròn, chữ, tẩy, hoàn tác. Nét vẽ được lưu trong notebook nên cũng có lịch sử, commit và chia sẻ như các nội dung khác."
+       },
+       {
+        "id": "wb21791475524555634",
+        "type": "board",
+        "title": "Hai con trỏ trên mảng đã sắp xếp",
+        "height": 420,
+        "bg": "grid",
+        "strokes": [
+         {
+          "t": "rect",
+          "c": 4280230696,
+          "w": 3,
+          "p": [
+           160,
+           160,
+           230,
+           220
+          ]
+         },
+         {
+          "t": "rect",
+          "c": 4280230696,
+          "w": 3,
+          "p": [
+           240,
+           160,
+           310,
+           220
+          ]
+         },
+         {
+          "t": "rect",
+          "c": 4280230696,
+          "w": 3,
+          "p": [
+           320,
+           160,
+           390,
+           220
+          ]
+         },
+         {
+          "t": "rect",
+          "c": 4280230696,
+          "w": 3,
+          "p": [
+           400,
+           160,
+           470,
+           220
+          ]
+         },
+         {
+          "t": "rect",
+          "c": 4280230696,
+          "w": 3,
+          "p": [
+           480,
+           160,
+           550,
+           220
+          ]
+         },
+         {
+          "t": "rect",
+          "c": 4280230696,
+          "w": 3,
+          "p": [
+           560,
+           160,
+           630,
+           220
+          ]
+         },
+         {
+          "t": "text",
+          "c": 4280230696,
+          "w": 4,
+          "p": [
+           185,
+           172
+          ],
+          "text": "1"
+         },
+         {
+          "t": "text",
+          "c": 4280230696,
+          "w": 4,
+          "p": [
+           265,
+           172
+          ],
+          "text": "3"
+         },
+         {
+          "t": "text",
+          "c": 4280230696,
+          "w": 4,
+          "p": [
+           345,
+           172
+          ],
+          "text": "5"
+         },
+         {
+          "t": "text",
+          "c": 4280230696,
+          "w": 4,
+          "p": [
+           425,
+           172
+          ],
+          "text": "7"
+         },
+         {
+          "t": "text",
+          "c": 4280230696,
+          "w": 4,
+          "p": [
+           505,
+           172
+          ],
+          "text": "9"
+         },
+         {
+          "t": "text",
+          "c": 4280230696,
+          "w": 4,
+          "p": [
+           585,
+           172
+          ],
+          "text": "11"
+         },
+         {
+          "t": "text",
+          "c": 4285429633,
+          "w": 2,
+          "p": [
+           190,
+           228
+          ],
+          "text": "0"
+         },
+         {
+          "t": "text",
+          "c": 4285429633,
+          "w": 2,
+          "p": [
+           270,
+           228
+          ],
+          "text": "1"
+         },
+         {
+          "t": "text",
+          "c": 4285429633,
+          "w": 2,
+          "p": [
+           350,
+           228
+          ],
+          "text": "2"
+         },
+         {
+          "t": "text",
+          "c": 4285429633,
+          "w": 2,
+          "p": [
+           430,
+           228
+          ],
+          "text": "3"
+         },
+         {
+          "t": "text",
+          "c": 4285429633,
+          "w": 2,
+          "p": [
+           510,
+           228
+          ],
+          "text": "4"
+         },
+         {
+          "t": "text",
+          "c": 4285429633,
+          "w": 2,
+          "p": [
+           590,
+           228
+          ],
+          "text": "5"
+         },
+         {
+          "t": "arrow",
+          "c": 4278807002,
+          "w": 3,
+          "p": [
+           195,
+           330,
+           195,
+           255
+          ]
+         },
+         {
+          "t": "text",
+          "c": 4278807002,
+          "w": 4,
+          "p": [
+           185,
+           340
+          ],
+          "text": "l"
+         },
+         {
+          "t": "arrow",
+          "c": 4291764782,
+          "w": 3,
+          "p": [
+           595,
+           330,
+           595,
+           255
+          ]
+         },
+         {
+          "t": "text",
+          "c": 4291764782,
+          "w": 4,
+          "p": [
+           585,
+           340
+          ],
+          "text": "r"
+         },
+         {
+          "t": "highlighter",
+          "c": 4290742016,
+          "w": 3,
+          "p": [
+           160,
+           140,
+           300,
+           138,
+           450,
+           140,
+           630,
+           138
+          ]
+         },
+         {
+          "t": "text",
+          "c": 4279926583,
+          "w": 4,
+          "p": [
+           160,
+           60
+          ],
+          "text": "Hai con trỏ: tìm cặp có tổng = 12"
+         }
+        ]
+       },
+       {
+        "id": "bbcb51acfe25",
+        "type": "heading",
+        "level": 2,
+        "text": "Bài tập và contest"
+       },
+       {
+        "id": "656f5eddde94",
+        "type": "markdown",
+        "text": "Khối **Bài tập** có đề, test, code chuẩn và trình sinh test. Người học nộp bài và được chấm như Codeforces. Mở **Contest** để gom các bài thành một kỳ thi có giờ và bảng xếp hạng."
+       },
+       {
+        "id": "768e2aea038d",
+        "type": "problem",
+        "title": "Tổng hai số",
+        "statement": "Cho hai số nguyên **a** và **b** (|a|, |b| ≤ 9·10^18). Hãy in ra **a + b**.\n\n### Dữ liệu vào\nMột dòng gồm hai số nguyên `a b`.\n\n### Kết quả\nMột số nguyên là tổng `a + b`.\n\n*Gợi ý: tổng có thể vượt `long long`, hãy dùng `__int128`.*",
+        "timeLimit": 1000,
+        "memoryLimit": 256,
+        "checker": "tokens",
+        "reference": "#include <bits/stdc++.h>\nusing namespace std;\n\nstring toStr(__int128 x) {\n    if (x == 0) return \"0\";\n    bool neg = x < 0; if (neg) x = -x;\n    string s;\n    while (x > 0) { s += char('0' + x % 10); x /= 10; }\n    if (neg) s += '-';\n    reverse(s.begin(), s.end());\n    return s;\n}\n\nint main() {\n    long long a, b;\n    cin >> a >> b;\n    cout << toStr((__int128)a + b) << '\\n';\n}\n",
+        "generator": "#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    long long seed;\n    cin >> seed;\n    mt19937_64 rng(seed);\n    long long M = 9000000000000000000LL;\n    auto rnd = [&]() { return (long long)(rng() % (2 * (unsigned long long)M + 1)) - M; };\n    cout << rnd() << ' ' << rnd() << '\\n';\n}\n",
+        "genCount": 10,
+        "tests": [
+         {
+          "input": "1 2\n",
+          "output": "3\n",
+          "sample": true
+         },
+         {
+          "input": "9000000000000000000 9000000000000000000\n",
+          "output": "18000000000000000000\n",
+          "sample": true
+         },
+         {
+          "input": "-5 3\n",
+          "output": "-2\n",
+          "sample": false
+         },
+         {
+          "input": "-9000000000000000000 -9000000000000000000\n",
+          "output": "-18000000000000000000\n",
+          "sample": false
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
   "96c01d7823c94e89": {
    "id": "96c01d7823c94e89",
    "parents": [],
