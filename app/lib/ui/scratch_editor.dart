@@ -764,6 +764,9 @@ class _SlotView extends StatelessWidget {
         );
       case SlotKind.func:
         return const SizedBox();
+      case SlotKind.label:
+        // Nhắc lại tên biến của vòng lặp (vd. "i < 10; i++").
+        return Text('${a['VAR'] ?? 'i'}', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600));
       default:
         final cur = a[name];
         Widget inner;

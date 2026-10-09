@@ -59,6 +59,35 @@ void main() {
     expect(lastNote('k-dfs', '1 2 1 3 2 4'), 'Thứ tự thăm: 1 2 4 3');
   }, skip: !hasNode);
 
+  test('vòng for kiểu C++: for (char c : s), for (auto x : mảng), for (i = a; i < b; i++)', () {
+    final prog = {
+      'v': 2,
+      'vars': <dynamic>['c', 'dem', 'a', 'x', 'tong', 'i', 'k'],
+      'funcs': <dynamic>[],
+      'main': <dynamic>[
+        newNode('var_set', a: {'VAR': 'dem', 'X': '0'}),
+        newNode('foreach_text', a: {'VAR': 'c', 'T': 'banana'})
+          ..['do'] = [
+            newNode('if', a: {'COND': newNode('compare', a: {'A': newNode('var_get', a: {'VAR': 'c'}), 'OP': '==', 'B': 'a'})})
+              ..['do'] = [newNode('var_change', a: {'VAR': 'dem', 'X': '1'})],
+          ],
+        newNode('array_create', a: {'VAR': 'a', 'LIST': '4 8 15'}),
+        newNode('var_set', a: {'VAR': 'tong', 'X': '0'}),
+        newNode('foreach_array', a: {'VAR': 'x', 'ARR': 'a'})..['do'] = [newNode('var_change', a: {'VAR': 'tong', 'X': newNode('var_get', a: {'VAR': 'x'})})],
+        newNode('var_set', a: {'VAR': 'k', 'X': '0'}),
+        newNode('for_lt', a: {'VAR': 'i', 'FROM': '2', 'TO': '5'})..['do'] = [newNode('var_change', a: {'VAR': 'k', 'X': newNode('var_get', a: {'VAR': 'i'})})],
+        newNode('step', a: {'X': newNode('js_expr', a: {'CODE': '"dem=" + v_dem + " tong=" + v_tong + " k=" + v_k'})}),
+      ],
+    };
+    final code = generateJs(prog);
+    expect(code, contains('for (v_c of String('));
+    if (!hasNode) return;
+    final r = runNode(code, '')!;
+    expect(r['error'], isNull, reason: code);
+    // banana có 3 chữ a; 4+8+15 = 27; 2+3+4 = 9
+    expect(((r['frames'] as List).last as Map)['note'], 'dem=3 tong=27 k=9');
+  });
+
   test('chuyển khối Blockly của bản cũ', () {
     final legacy = {
       'blocks': {

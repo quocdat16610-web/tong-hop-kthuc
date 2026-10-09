@@ -11,7 +11,7 @@ import 'vcs.dart' show Json;
 
 enum Shape { stmt, cblock, ifelse, reporter, boolean, cap }
 
-enum SlotKind { num, text, any, bool, list, varName, dropdown, ident, code, func }
+enum SlotKind { num, text, any, bool, list, varName, dropdown, ident, code, func, label }
 
 class Slot {
   final SlotKind kind;
@@ -212,10 +212,28 @@ final Map<String, BlockSpec> specs = {
     }, tip: 'Giống for (int i = từ; i <= đến; i += bước) trong C++'),
     BlockSpec('while', 'control', Shape.cblock, 'lặp khi {COND}', {'COND': _bool}, (g, n) => 'while (${g.e(n, 'COND')}) {\n${g.body(n)}}'),
     BlockSpec('until', 'control', Shape.cblock, 'lặp cho đến khi {COND}', {'COND': _bool}, (g, n) => 'while (!${g.e(n, 'COND')}) {\n${g.body(n)}}'),
-    BlockSpec('foreach', 'control', Shape.cblock, 'với mỗi {VAR} trong {LIST}', {'VAR': const Slot(SlotKind.varName, 'x'), 'LIST': _list}, (g, n) {
+    BlockSpec('for_lt', 'control', Shape.cblock, 'for (int {VAR} = {FROM}; {VAR2} < {TO}; {VAR3}++)', {
+      'VAR': const Slot(SlotKind.varName, 'i'),
+      'FROM': _n0,
+      'VAR2': const Slot(SlotKind.label),
+      'TO': const Slot(SlotKind.num, '10'),
+      'VAR3': const Slot(SlotKind.label),
+    }, (g, n) {
+      final e = g.tmp(), x = g.v(g.f(n, 'VAR'));
+      return '{\n  const $e = ${g.e(n, 'TO')};\n  for ($x = ${g.e(n, 'FROM')}; $x < $e; $x++) {\n    __show(${_name(g, n)}, $x);\n${g.stmts(n['do'] as List?, '    ')}  }\n}';
+    }, tip: 'Vòng for kiểu C++: chạy từ FROM đến TO − 1'),
+    BlockSpec('foreach', 'control', Shape.cblock, 'for (auto {VAR} : danh sách {LIST})', {'VAR': const Slot(SlotKind.varName, 'x'), 'LIST': _list}, (g, n) {
       final x = g.v(g.f(n, 'VAR'));
       return 'for ($x of __list(${g.e(n, 'LIST')})) {\n  __show(${_name(g, n)}, $x);\n${g.body(n)}}';
-    }),
+    }, tip: 'Duyệt từng phần tử của danh sách (dữ liệu vào, danh sách, đỉnh kề…)'),
+    BlockSpec('foreach_text', 'control', Shape.cblock, 'for (char {VAR} : chuỗi {T})', {'VAR': const Slot(SlotKind.varName, 'c'), 'T': const Slot(SlotKind.text, 'abc')}, (g, n) {
+      final x = g.v(g.f(n, 'VAR'));
+      return 'for ($x of String(${g.e(n, 'T')})) {\n  __show(${_name(g, n)}, $x);\n${g.body(n)}}';
+    }, tip: 'Duyệt từng ký tự của chuỗi, như for (char c : s) trong C++'),
+    BlockSpec('foreach_array', 'control', Shape.cblock, 'for (auto {VAR} : mảng {ARR})', {'VAR': const Slot(SlotKind.varName, 'x'), 'ARR': const Slot(SlotKind.varName, 'a')}, (g, n) {
+      final x = g.v(g.f(n, 'VAR')), arr = g.v(g.f(n, 'ARR')), k = g.tmp(), name = jsStr(g.f(n, 'VAR'));
+      return 'for (let $k = 0; $k < $arr.length; $k++) {\n  $x = $arr.get($k);\n  $arr.pointer($name, $k);\n  __show($name, $x);\n  viz.step($name + " = " + $x);\n${g.body(n)}}\n$arr.pointer($name, null);';
+    }, tip: 'Duyệt từng phần tử của mảng (vẽ), có mũi tên chỉ phần tử đang xét'),
     BlockSpec('if', 'control', Shape.cblock, 'nếu {COND} thì', {'COND': _bool}, (g, n) => 'if (${g.e(n, 'COND')}) {\n${g.body(n)}}'),
     BlockSpec('ifelse', 'control', Shape.ifelse, 'nếu {COND} thì', {'COND': _bool}, (g, n) => 'if (${g.e(n, 'COND')}) {\n${g.body(n)}} else {\n${g.body(n, 'else')}}'),
     BlockSpec('break', 'control', Shape.cap, 'thoát vòng lặp', {}, (g, n) => 'break;'),
@@ -420,7 +438,7 @@ Json newNode(String op, {Map<String, dynamic>? a}) {
   final s = specs[op]!;
   final args = <String, dynamic>{};
   s.slots.forEach((k, slot) {
-    if (slot.kind != SlotKind.bool && slot.kind != SlotKind.func) args[k] = slot.dflt;
+    if (slot.kind != SlotKind.bool && slot.kind != SlotKind.func && slot.kind != SlotKind.label) args[k] = slot.dflt;
   });
   if (a != null) args.addAll(a);
   return {
