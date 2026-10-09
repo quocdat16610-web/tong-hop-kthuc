@@ -55,4 +55,15 @@ Root: HKCU; Subkey: "Software\Classes\sotaydsa\shell\open\command"; ValueType: s
 [Run]
 Filename: "{app}\SoTayDSA.exe"; Description: "{cm:LaunchProgram,Sổ tay DSA C++}"; Flags: nowait postinstall skipifsilent
 ; Cập nhật tự động (cài im lặng): mở lại app sau khi cài xong
-Filename: "{app}\SoTayDSA.exe"; Flags: nowait runasoriginaluser; Check: WizardSilent
+Filename: "{app}\SoTayDSA.exe"; Flags: nowait runasoriginaluser; Check: WizardSilent and not NoRun
+
+[Code]
+function NoRun: Boolean;
+var
+  i: Integer;
+begin
+  Result := False;
+  for i := 1 to ParamCount do
+    if CompareText(ParamStr(i), '/NORUN') = 0 then Result := True;
+end;
+

@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:window_manager/window_manager.dart';
 
 import '../app_state.dart';
 import '../core/storage.dart';
@@ -21,9 +22,15 @@ void _notify(String msg, {SnackBarAction? action}) {
   messengerKey.currentState?.showSnackBar(SnackBar(content: Text(msg), action: action, duration: const Duration(seconds: 6)));
 }
 
-class UpdateService extends ChangeNotifier {
+class UpdateService extends ChangeNotifier with WidgetsBindingObserver, WindowListener {
   final AppState app;
   UpdateService(this.app);
+
+  /// Bản mới đã tải sẵn (Windows) — cài khi bấm "Khởi động lại" hoặc khi đóng app.
+  File? ready;
+  String? readySha;
+  double? downloadProgress;
+  DateTime _lastCheck = DateTime.fromMillisecondsSinceEpoch(0);
 
   AppRelease? release;
   String? releaseError;
@@ -42,22 +49,91 @@ class UpdateService extends ChangeNotifier {
   bool get updateAvailable => release?.isNewer ?? false;
   String get contentUrl => app.setting<String>('contentUrl', '').trim().isEmpty ? defaultContentUrl : app.setting<String>('contentUrl', '').trim();
 
+  bool get _canAutoInstall => Platform.isWindows && buildSha.isNotEmpty && app.setting('autoInstall', true);
+
+  void _checkAll() {
+    _lastCheck = DateTime.now();
+    if (app.setting('autoUpdate', true)) checkApp(silent: true);
+    if (app.setting('autoContent', true)) checkContent(silent: true);
+  }
+
   void start() {
     if (Platform.environment['SOTAY_NO_UPDATE'] != null) return;
-    Future.delayed(const Duration(seconds: 4), () {
-      if (app.setting('autoUpdate', true)) checkApp(silent: true);
-      if (app.setting('autoContent', true)) checkContent(silent: true);
-    });
-    _timer = Timer.periodic(const Duration(minutes: 30), (_) {
-      if (app.setting('autoUpdate', true)) checkApp(silent: true);
-      if (app.setting('autoContent', true)) checkContent(silent: true);
-    });
+    Future.delayed(const Duration(seconds: 3), _checkAll);
+    // Kiểm tra mỗi 5 phút, và ngay khi quay lại app (tối đa 1 lần / 3 phút).
+    _timer = Timer.periodic(const Duration(minutes: 5), (_) => _checkAll());
+    WidgetsBinding.instance.addObserver(this);
+    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+      windowManager.addListener(this);
+      windowManager.setPreventClose(true);
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && DateTime.now().difference(_lastCheck) > const Duration(minutes: 3)) _checkAll();
+  }
+
+  @override
+  void onWindowFocus() {
+    if (DateTime.now().difference(_lastCheck) > const Duration(minutes: 3)) _checkAll();
+  }
+
+  /// Đóng cửa sổ: lưu dữ liệu; nếu đã tải sẵn bản mới thì cài luôn (lần mở sau là bản mới).
+  @override
+  void onWindowClose() async {
+    try {
+      app.saveNow();
+      if (ready != null && ready!.existsSync()) await installReady(relaunch: false); // thoát luôn nếu thành công
+    } catch (_) {
+      // dù lỗi gì cũng phải đóng được cửa sổ
+    }
+    await windowManager.destroy();
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    windowManager.removeListener(this);
     super.dispose();
+  }
+
+  /// Tải ngầm bản mới (Windows) để cập nhật ngay khi người dùng đồng ý / đóng app.
+  Future<void> _prepare(AppRelease r) async {
+    if (!_canAutoInstall || downloadProgress != null || readySha == r.sha) return;
+    final url = installedWithSetup ? r.installer : r.portableZip;
+    if (url == null) return;
+    downloadProgress = 0;
+    notifyListeners();
+    try {
+      final f = await download(url, '${r.sha.substring(0, r.sha.length.clamp(0, 7))}-${Uri.parse(url).pathSegments.last}', (x) {
+        downloadProgress = x;
+        notifyListeners();
+      });
+      if (f.lengthSync() > 1024 * 1024) {
+        ready = f;
+        readySha = r.sha;
+      }
+    } catch (_) {
+      // thử lại ở lần kiểm tra sau
+    } finally {
+      downloadProgress = null;
+      notifyListeners();
+    }
+  }
+
+  /// Cài bản đã tải sẵn: sao lưu dữ liệu, chạy bộ cài im lặng (tự mở lại app) rồi thoát.
+  Future<void> installReady({bool relaunch = true}) async {
+    final f = ready;
+    if (f == null) return;
+    app.saveNow();
+    Storage.I.autoBackup('truoc-cap-nhat');
+    if (installedWithSetup) {
+      await runInstallerAndExit(f, relaunch: relaunch);
+    } else {
+      await replacePortableAndExit(f, relaunch: relaunch);
+    }
   }
 
   Future<void> checkApp({bool silent = false}) async {
@@ -68,7 +144,9 @@ class UpdateService extends ChangeNotifier {
       final wasNew = updateAvailable;
       release = await fetchRelease();
       releaseError = null;
-      if (silent && updateAvailable && !wasNew) {
+      if (updateAvailable && _canAutoInstall) {
+        unawaited(_prepare(release!));
+      } else if (silent && updateAvailable && !wasNew) {
         _notify('Có bản mới của Sổ tay DSA C++.', action: SnackBarAction(label: 'Cập nhật', onPressed: () => showUpdateDialog()));
       }
     } catch (e) {
@@ -170,9 +248,16 @@ Future<void> showUpdateDialog([BuildContext? context]) async {
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             value: svc.app.setting('autoUpdate', true),
-            title: const Text('Tự kiểm tra bản mới khi mở app'),
+            title: const Text('Tự kiểm tra bản mới (mỗi 5 phút)'),
             onChanged: (v) => setSt(() => svc.app.setSetting('autoUpdate', v)),
           ),
+          if (Platform.isWindows)
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: svc.app.setting('autoInstall', true),
+              title: const Text('Tự tải bản mới chạy ngầm và cài khi đóng app'),
+              onChanged: (v) => setSt(() => svc.app.setSetting('autoInstall', v)),
+            ),
         ]),
       );
     },
@@ -355,6 +440,23 @@ class UpdateBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final svc = context.watch<UpdateService>();
+    if (svc.ready != null) {
+      return Material(
+        color: context.cs.primaryContainer,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          child: Row(children: [
+            Icon(Icons.system_update_alt, size: 18, color: context.cs.onPrimaryContainer),
+            const SizedBox(width: 8),
+            Expanded(child: Text('Bản mới đã tải xong. Khởi động lại để cập nhật (hoặc sẽ tự cập nhật khi bạn đóng app). Dữ liệu được giữ nguyên.', style: TextStyle(color: context.cs.onPrimaryContainer))),
+            FilledButton(onPressed: () => svc.installReady(), child: const Text('Khởi động lại & cập nhật')),
+          ]),
+        ),
+      );
+    }
+    if (svc.downloadProgress != null) {
+      return LinearProgressIndicator(value: svc.downloadProgress! < 0 ? null : svc.downloadProgress, minHeight: 2);
+    }
     if (!svc.updateAvailable || svc.app.setting('dismissedSha', '') == svc.release?.sha) return const SizedBox();
     return Material(
       color: context.cs.primaryContainer,

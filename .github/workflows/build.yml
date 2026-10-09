@@ -12,6 +12,11 @@ on:
 permissions:
   contents: write
 
+# Push mới huỷ lượt build cũ còn đang chạy trên cùng nhánh → bản mới lên Release sớm hơn.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   FLUTTER_VERSION: '3.47.6'
   WINLIBS_URL: https://github.com/brechtsanders/winlibs_mingw/releases/download/14.2.0posix-19.1.1-12.0.0-ucrt-r2/winlibs-x86_64-posix-seh-gcc-14.2.0-mingw-w64ucrt-12.0.0-r2.zip
@@ -37,7 +42,6 @@ jobs:
       - run: flutter test
 
   android:
-    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -64,7 +68,6 @@ jobs:
           path: dist/*.apk
 
   windows:
-    needs: test
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -124,7 +127,7 @@ jobs:
   # Đưa file cài đặt lên trang Releases để tải trực tiếp (.exe, .apk), không cần giải nén artifact.
   release:
     if: github.event_name == 'push'
-    needs: [android, windows]
+    needs: [test, android, windows]
     runs-on: ubuntu-latest
     defaults:
       run:

@@ -88,13 +88,14 @@ bool get installedWithSetup {
 }
 
 /// Windows: chạy bộ cài ở chế độ im lặng (tự mở lại app khi xong) rồi thoát app.
-Future<void> runInstallerAndExit(File setup) async {
-  await Process.start(setup.path, ['/SILENT', '/SP-', '/SUPPRESSMSGBOXES', '/NOCANCEL', '/CLOSEAPPLICATIONS'], mode: ProcessStartMode.detached);
+Future<void> runInstallerAndExit(File setup, {bool relaunch = true}) async {
+  // /NORUN (tham số riêng của bộ cài) → không mở lại app khi cập nhật lúc người dùng đóng app.
+  await Process.start(setup.path, ['/VERYSILENT', '/SP-', '/SUPPRESSMSGBOXES', '/NOCANCEL', '/CLOSEAPPLICATIONS', if (!relaunch) '/NORUN'], mode: ProcessStartMode.detached);
   exit(0);
 }
 
 /// Windows bản portable: giải nén bản mới đè lên thư mục app sau khi app thoát, rồi mở lại.
-Future<void> replacePortableAndExit(File zip) async {
+Future<void> replacePortableAndExit(File zip, {bool relaunch = true}) async {
   final appDir = p.dirname(Platform.resolvedExecutable);
   final tmp = p.join(p.dirname(zip.path), 'giai-nen');
   final script = File(p.join(p.dirname(zip.path), 'cap-nhat.cmd'));
@@ -106,7 +107,7 @@ Future<void> replacePortableAndExit(File zip) async {
     'rmdir /s /q "$tmp" 2>nul',
     'powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -LiteralPath \'${zip.path}\' -DestinationPath \'$tmp\' -Force"',
     'robocopy "$tmp" "$appDir" /E /NFL /NDL /NJH /NJS /NP >nul',
-    'start "" "${p.join(appDir, p.basename(Platform.resolvedExecutable))}"',
+    if (relaunch) 'start "" "${p.join(appDir, p.basename(Platform.resolvedExecutable))}"',
   ].join('\r\n'));
   await Process.start('cmd', ['/c', script.path], mode: ProcessStartMode.detached);
   exit(0);
