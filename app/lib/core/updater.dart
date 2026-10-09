@@ -65,8 +65,10 @@ Future<AppRelease> fetchRelease({http.Client? client}) async {
     final r = await c.get(Uri.parse('https://api.github.com/repos/$githubRepo/releases/tags/$releaseTag'), headers: _headers).timeout(const Duration(seconds: 20));
     if (r.statusCode != 200) throw HttpException('GitHub trả lỗi ${r.statusCode}');
     final j = jsonDecode(utf8.decode(r.bodyBytes)) as Map;
+    // Commit của bản build nằm trong ghi chú release ("Commit: <sha>"); bản cũ dùng target_commitish.
+    final fromBody = RegExp(r'Commit:\s*([0-9a-f]{7,40})').firstMatch('${j['body'] ?? ''}')?.group(1);
     return AppRelease(
-      '${j['target_commitish'] ?? ''}',
+      fromBody ?? '${j['target_commitish'] ?? ''}',
       '${j['name'] ?? ''}',
       '${j['body'] ?? ''}',
       '${j['html_url'] ?? 'https://github.com/$githubRepo/releases'}',

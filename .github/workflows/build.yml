@@ -172,6 +172,14 @@ jobs:
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             gh release create "$GITHUB_REF_NAME" out/* --title "Sổ tay DSA C++ $GITHUB_REF_NAME" --notes-file notes.md
           else
-            gh release delete ban-moi-nhat --yes --cleanup-tag || true
-            gh release create ban-moi-nhat out/* --prerelease --target "$GITHUB_SHA" --title "Bản mới nhất (${GITHUB_REF_NAME})" --notes-file notes.md
+            # Giữ nguyên release "ban-moi-nhat" và chỉ thay file: tải file mới lên trước, xoá file cũ sau,
+            # nên trang tải không bao giờ trống. (Không xoá / tạo lại tag mỗi lần build.)
+            if ! gh release view ban-moi-nhat >/dev/null 2>&1; then
+              gh release create ban-moi-nhat --prerelease --title "Bản mới nhất" --notes-file notes.md
+            fi
+            gh release upload ban-moi-nhat out/* --clobber
+            for a in $(gh release view ban-moi-nhat --json assets -q '.assets[].name'); do
+              [ -e "out/$a" ] || gh release delete-asset ban-moi-nhat "$a" --yes
+            done
+            gh release edit ban-moi-nhat --prerelease --title "Bản mới nhất (${GITHUB_REF_NAME})" --notes-file notes.md
           fi
