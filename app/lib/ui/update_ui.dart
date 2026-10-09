@@ -102,8 +102,9 @@ class UpdateService extends ChangeNotifier with WidgetsBindingObserver, WindowLi
   /// Tải ngầm bản mới (Windows) để cập nhật ngay khi người dùng đồng ý / đóng app.
   Future<void> _prepare(AppRelease r) async {
     if (!_canAutoInstall || downloadProgress != null || readySha == r.sha) return;
-    final url = installedWithSetup ? r.installer : r.portableZip;
-    if (url == null) return;
+    final w = r.windowsUpdate;
+    if (w == null) return;
+    final url = w.url;
     downloadProgress = 0;
     notifyListeners();
     try {
@@ -129,10 +130,11 @@ class UpdateService extends ChangeNotifier with WidgetsBindingObserver, WindowLi
     if (f == null) return;
     app.saveNow();
     Storage.I.autoBackup('truoc-cap-nhat');
-    if (installedWithSetup) {
-      await runInstallerAndExit(f, relaunch: relaunch);
-    } else {
+    // .zip (gói cập nhật nhẹ / bản portable) → chép đè thư mục app; .exe → chạy bộ cài im lặng.
+    if (f.path.toLowerCase().endsWith('.zip')) {
       await replacePortableAndExit(f, relaunch: relaunch);
+    } else {
+      await runInstallerAndExit(f, relaunch: relaunch);
     }
   }
 
@@ -282,9 +284,9 @@ Future<void> showUpdateDialog([BuildContext? context]) async {
                       await launchUrl(Uri.parse(r.htmlUrl), mode: LaunchMode.externalApplication);
                       return;
                     }
-                    final setup = installedWithSetup;
-                    final url = setup ? r.installer : r.portableZip;
-                    if (url == null) throw Exception('Chưa có file cập nhật trên Release.');
+                    final w = r.windowsUpdate;
+                    if (w == null) throw Exception('Chưa có file cập nhật trên Release.');
+                    final url = w.url;
                     void tick(double x) {
                       progress = x;
                       status = x < 0 ? 'Đang tải…' : 'Đang tải ${(x * 100).toStringAsFixed(0)}%';
@@ -299,7 +301,7 @@ Future<void> showUpdateDialog([BuildContext? context]) async {
                     setSt(() {});
                     svc.app.saveNow();
                     await Future<void>.delayed(const Duration(milliseconds: 400));
-                    if (setup) {
+                    if (!w.zip) {
                       await runInstallerAndExit(f);
                     } else {
                       await replacePortableAndExit(f);

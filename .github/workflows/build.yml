@@ -58,10 +58,16 @@ jobs:
       - run: |
           V=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
           # Số bản tăng dần mỗi lần build để Android cài đè bản mới (giữ dữ liệu), ký bằng khoá cố định trong repo.
-          flutter build apk --release --build-number=$((100 + ${{ github.run_number }})) --dart-define=GIT_SHA=${{ github.sha }} --dart-define=APP_VERSION=$V
+          # Tách APK theo loại chip: bản arm64 (gần như mọi điện thoại) nhẹ hơn nhiều so với APK gộp.
+          flutter build apk --release --split-per-abi --build-number=$((100 + ${{ github.run_number }})) --dart-define=GIT_SHA=${{ github.sha }} --dart-define=APP_VERSION=$V
       - run: |
           V=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
-          mkdir -p ../dist && cp build/app/outputs/flutter-apk/app-release.apk "../dist/SoTayDSA-$V-android.apk"
+          O=build/app/outputs/flutter-apk
+          mkdir -p ../dist
+          cp $O/app-arm64-v8a-release.apk "../dist/SoTayDSA-$V-android.apk"
+          cp $O/app-armeabi-v7a-release.apk "../dist/SoTayDSA-$V-android-armv7.apk"
+          cp $O/app-x86_64-release.apk "../dist/SoTayDSA-$V-android-x86_64.apk"
+          ls -la ../dist"
       - uses: actions/upload-artifact@v4
         with:
           name: android-apk
@@ -81,6 +87,13 @@ jobs:
         run: |
           V=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
           flutter build windows --release --dart-define=GIT_SHA=${{ github.sha }} --dart-define=APP_VERSION=$V
+      - name: Gói cập nhật nhẹ (chỉ phần app, không kèm g++/gdb) cho tự cập nhật
+        shell: pwsh
+        run: |
+          $v = ((Select-String -Path pubspec.yaml -Pattern '^version:').Line -replace 'version:\s*','' -replace '\+.*','')
+          New-Item -ItemType Directory -Force ../dist | Out-Null
+          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath "../dist/SoTayDSA-$v-app-update.zip" -CompressionLevel Optimal
+          "{0:N1} MB" -f ((Get-Item "../dist/SoTayDSA-$v-app-update.zip").Length / 1MB)
       - name: Tải trình biên dịch g++ và gdb (MinGW-w64 / WinLibs) để đóng gói kèm
         shell: pwsh
         run: |
@@ -149,7 +162,8 @@ jobs:
           cat > notes.md <<NOTES
           Ứng dụng chạy trực tiếp (không phải website). Tải file phù hợp:
           - **Windows**: \`SoTayDSA-Setup-*.exe\` (bộ cài, có sẵn g++ và gdb) hoặc \`SoTayDSA-*-win-x64-portable.zip\` (giải nén rồi chạy \`SoTayDSA.exe\`)
-          - **Android**: \`SoTayDSA-*-android.apk\` (code C++ được biên dịch online, cần Internet)
+          - **Android**: \`SoTayDSA-*-android.apk\` (điện thoại thông thường, chip arm64). Máy đời cũ dùng \`-android-armv7.apk\`. Code C++ được biên dịch online, cần Internet.
+          - \`*-app-update.zip\`: gói cập nhật nhẹ app tự tải khi cập nhật (không cần tải tay).
 
           App tự kiểm tra bản mới và tự nhận nội dung bài tập mới (\`noi-dung.json\`, gom từ thư mục content/).
 

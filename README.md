@@ -8,7 +8,7 @@
 - **Bài tập & contest kiểu Codeforces**: tác giả viết đề, code chuẩn và trình sinh test — app tự tạo output đúng; người học nộp bài và nhận Accepted / Wrong answer on test N / TLE / RE / CE. Contest có giờ thi và bảng xếp hạng ICPC.
 - **Bảng trắng**: tab riêng (biểu tượng bút ở thanh bên trái, Alt+3; trên điện thoại ở thanh dưới) với nhiều bảng, và khối vẽ tay ngay trong trang để minh hoạ thuật toán — bút, bút dạ, đường thẳng, mũi tên, hình chữ nhật, hình tròn, chữ, tẩy, 8 màu, nền kẻ ô / chấm, hoàn tác / làm lại, lưu thành ảnh PNG, vẽ toàn màn hình (trên điện thoại chạm vào bảng để vẽ). Nét vẽ lưu dạng vector nên có lịch sử, commit, merge và chia sẻ như ghi chú.
 - **Mô phỏng ghép khối kiểu Scratch**: kéo khối màu từ bảng 12 nhóm (Hiển thị, Dữ liệu vào, Điều khiển, Toán, Chữ, Biến, Danh sách, Mảng vẽ, Stack/Queue, Lưới, Đồ thị/Cây, Hàm) vào chương trình; thả khối giá trị vào ô; vòng lặp (kể cả `for (char c : s)`, `for (auto x : mảng)`, `for (int i = a; i < b; i++)`, `while`, `do … while`, `while (true)` như C++), nếu/không thì, biến, hàm có tham số và đệ quy. Có 8 mẫu (sắp xếp nổi bọt/chọn/chèn, tìm kiếm nhị phân, stack ngoặc, BFS lưới, DFS đệ quy, cây BST). Mô phỏng khối của bản cũ tự chuyển sang khối mới.
-- **Tự cập nhật từ GitHub**: app kiểm tra bản mới mỗi 5 phút và khi mở lại cửa sổ; Windows tự tải ngầm rồi cài khi bấm "Khởi động lại" hoặc khi đóng app, Android tải APK mới; **Thư viện bài tập** tự nhận nội dung mới mà tác giả đăng trong thư mục [`content/`](content/README.md) — ai chưa sửa thì cập nhật tự động, ai đã ghi chú thì được mời merge, không mất ghi chú.
+- **Tự cập nhật từ GitHub**: app kiểm tra bản mới mỗi 5 phút và khi mở lại cửa sổ; Windows chỉ tải gói cập nhật nhẹ (không tải lại g++/gdb), tải song song 4 luồng, rồi cài khi bấm "Khởi động lại" hoặc khi đóng app, Android tải APK mới; **Thư viện bài tập** tự nhận nội dung mới mà tác giả đăng trong thư mục [`content/`](content/README.md) — ai chưa sửa thì cập nhật tự động, ai đã ghi chú thì được mời merge, không mất ghi chú.
 - **Thư viện code mẫu C++** (nút **Code mẫu** trong IDE và khối code): khung bài thi, DSU, Fenwick, cây phân đoạn, Sparse Table, BFS, DFS, Dijkstra, sắp xếp tô-pô, Kruskal, tìm kiếm nhị phân, hai con trỏ, LIS, cái túi, LCS, KMP, sàng nguyên tố, luỹ thừa nhanh, GCD/LCM — tất cả đều được kiểm thử biên dịch.
 - **Tìm nhanh (Ctrl+K)** trong mọi notebook: trang, ghi chú, code, bài tập, video, bảng trắng — bấm kết quả để nhảy tới đúng chỗ.
 - **Tiến độ luyện tập**: mọi bài tập trong các notebook với trạng thái đã giải / đang làm / chưa làm và số lần nộp.
@@ -22,7 +22,7 @@ Vào **[Releases](https://github.com/quocdat16610-web/tong-hop-kthuc/releases)**
 |---|---|---|
 | Windows | `SoTayDSA-Setup-x.y.z.exe` | Bộ cài, không cần quyền admin. **Có sẵn g++ 14 và gdb** — chạy code, chấm bài, gỡ lỗi không cần Internet. |
 | Windows (không cần cài) | `SoTayDSA-x.y.z-win-x64-portable.zip` | Giải nén rồi bấm đúp `SoTayDSA.exe`. |
-| Android | `SoTayDSA-x.y.z-android.apk` | Mở file trên điện thoại để cài (cho phép cài ứng dụng không rõ nguồn gốc). Code C++ được biên dịch online qua Compiler Explorer nên cần Internet. |
+| Android | `SoTayDSA-x.y.z-android.apk` | Bản cho điện thoại chip arm64 (gần như mọi máy hiện nay); máy đời cũ dùng `-android-armv7.apk`. Mở file trên điện thoại để cài (cho phép cài ứng dụng không rõ nguồn gốc). Code C++ được biên dịch online qua Compiler Explorer nên cần Internet. |
 
 Mỗi lần push, GitHub Actions build lại và cập nhật "Bản mới nhất". Push tag dạng `v3.1.0` để tạo bản phát hành có số phiên bản.
 

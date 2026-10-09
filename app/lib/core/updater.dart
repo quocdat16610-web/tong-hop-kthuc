@@ -5,6 +5,7 @@
 //    như một nhánh "github/…" và tự cập nhật nếu người dùng chưa sửa gì (không thì gợi ý merge).
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ffi' show Abi;
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
@@ -35,8 +36,27 @@ class AppRelease {
 
   String? assetMatching(RegExp re) => assets.entries.where((e) => re.hasMatch(e.key)).firstOrNull?.value;
   String? get installer => assetMatching(RegExp(r'^SoTayDSA-Setup-.*\.exe$'));
-  String? get portableZip => assetMatching(RegExp(r'win-x64.*\.zip$'));
-  String? get apk => assetMatching(RegExp(r'\.apk$'));
+  String? get portableZip => assetMatching(RegExp(r'win-x64-portable\.zip$')) ?? assetMatching(RegExp(r'win-x64.*\.zip$'));
+
+  /// Gói cập nhật nhẹ: chỉ phần app, không kèm g++/gdb (máy đã có sẵn từ lần cài trước).
+  String? get appUpdateZip => assetMatching(RegExp(r'-app-update\.zip$'));
+
+  /// APK đúng loại chip của máy (nhẹ hơn APK gộp).
+  String? get apk {
+    final abi = Abi.current();
+    if (abi == Abi.androidArm) return assetMatching(RegExp(r'android-armv7\.apk$')) ?? assetMatching(RegExp(r'android\.apk$'));
+    if (abi == Abi.androidX64) return assetMatching(RegExp(r'android-x86_64\.apk$')) ?? assetMatching(RegExp(r'android\.apk$'));
+    return assetMatching(RegExp(r'android\.apk$')) ?? assetMatching(RegExp(r'\.apk$'));
+  }
+
+  /// Windows: gói cập nhật nhẹ nếu máy đã có g++ đi kèm, không thì bộ cài / bản portable đầy đủ.
+  ({String url, bool zip})? get windowsUpdate {
+    final hasCompiler = Directory(p.join(p.dirname(Platform.resolvedExecutable), 'mingw64', 'bin')).existsSync();
+    if (hasCompiler && appUpdateZip != null) return (url: appUpdateZip!, zip: true);
+    if (installedWithSetup && installer != null) return (url: installer!, zip: false);
+    if (portableZip != null) return (url: portableZip!, zip: true);
+    return null;
+  }
 }
 
 Future<AppRelease> fetchRelease({http.Client? client}) async {
@@ -59,20 +79,67 @@ Future<AppRelease> fetchRelease({http.Client? client}) async {
 }
 
 /// Tải file về thư mục tạm, báo tiến độ (0..1, hoặc -1 khi không biết kích thước).
-Future<File> download(String url, String name, void Function(double) onProgress) async {
+/// File lớn được tải song song 4 luồng (HTTP Range) — nhanh hơn nhiều khi đường truyền quốc tế chậm.
+Future<File> download(String url, String name, void Function(double) onProgress, {int parts = 4}) async {
+  final dir = Directory(p.join(Directory.systemTemp.path, 'so-tay-dsa-update'))..createSync(recursive: true);
+  final f = File(p.join(dir.path, name));
+  final headers = {'User-Agent': 'SoTayDSA/$buildVersion'};
   final c = http.Client();
   try {
-    final res = await c.send(http.Request('GET', Uri.parse(url))..headers['User-Agent'] = 'SoTayDSA/$buildVersion');
+    // Hỏi kích thước + kiểm tra máy chủ có hỗ trợ tải từng đoạn không.
+    final probe = await c.send(http.Request('GET', Uri.parse(url))..headers.addAll({...headers, 'Range': 'bytes=0-0'}));
+    final range = probe.headers['content-range'];
+    await probe.stream.drain<void>();
+    final total = range == null ? 0 : int.tryParse(range.split('/').last) ?? 0;
+    if (probe.statusCode == 206 && total > 4 * 1024 * 1024 && parts > 1) {
+      final size = (total / parts).ceil();
+      final got = List<int>.filled(parts, 0);
+      final pieces = await Future.wait([
+        for (var i = 0; i < parts; i++)
+          () async {
+            final from = i * size, to = ((i + 1) * size - 1).clamp(0, total - 1);
+            final part = File('${f.path}.part$i');
+            for (var attempt = 0;; attempt++) {
+              try {
+                final res = await c.send(http.Request('GET', Uri.parse(url))..headers.addAll({...headers, 'Range': 'bytes=$from-$to'}));
+                if (res.statusCode != 206) throw HttpException('Máy chủ trả ${res.statusCode}');
+                final sink = part.openWrite();
+                got[i] = 0;
+                await for (final chunk in res.stream) {
+                  sink.add(chunk);
+                  got[i] += chunk.length;
+                  onProgress(got.fold<int>(0, (a, b) => a + b) / total);
+                }
+                await sink.close();
+                if (part.lengthSync() != to - from + 1) throw const HttpException('Thiếu dữ liệu');
+                return part;
+              } catch (_) {
+                if (attempt >= 2) rethrow;
+              }
+            }
+          }(),
+      ]);
+      final out = f.openWrite();
+      for (final x in pieces) {
+        await out.addStream(x.openRead());
+      }
+      await out.close();
+      for (final x in pieces) {
+        x.deleteSync();
+      }
+      if (f.lengthSync() != total) throw const HttpException('File tải về bị thiếu');
+      return f;
+    }
+    // Máy chủ không hỗ trợ Range: tải một luồng.
+    final res = await c.send(http.Request('GET', Uri.parse(url))..headers.addAll(headers));
     if (res.statusCode != 200) throw HttpException('Tải thất bại (${res.statusCode})');
-    final dir = Directory(p.join(Directory.systemTemp.path, 'so-tay-dsa-update'))..createSync(recursive: true);
-    final f = File(p.join(dir.path, name));
     final sink = f.openWrite();
     var got = 0;
-    final total = res.contentLength ?? 0;
+    final len = res.contentLength ?? 0;
     await for (final chunk in res.stream) {
       sink.add(chunk);
       got += chunk.length;
-      onProgress(total > 0 ? got / total : -1);
+      onProgress(len > 0 ? got / len : -1);
     }
     await sink.close();
     return f;
