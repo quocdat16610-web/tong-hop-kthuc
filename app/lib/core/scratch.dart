@@ -210,7 +210,12 @@ final Map<String, BlockSpec> specs = {
       final s = g.tmp(), e = g.tmp(), x = g.v(g.f(n, 'VAR'));
       return '{\n  const $s = ${g.e(n, 'BY')}, $e = ${g.e(n, 'TO')};\n  for ($x = ${g.e(n, 'FROM')}; $s >= 0 ? $x <= $e : $x >= $e; $x += $s) {\n    __show(${_name(g, n)}, $x);\n${g.stmts(n['do'] as List?, '    ')}  }\n}';
     }, tip: 'Giống for (int i = từ; i <= đến; i += bước) trong C++'),
-    BlockSpec('while', 'control', Shape.cblock, 'lặp khi {COND}', {'COND': _bool}, (g, n) => 'while (${g.e(n, 'COND')}) {\n${g.body(n)}}'),
+    BlockSpec('while', 'control', Shape.cblock, 'while ({COND})', {'COND': _bool}, (g, n) => 'while (${g.e(n, 'COND')}) {\n${g.body(n)}}',
+        tip: 'Lặp khi điều kiện còn đúng (kiểm tra trước mỗi lượt)'),
+    BlockSpec('do_while', 'control', Shape.cblock, 'do { … } while ({COND})', {'COND': _bool}, (g, n) => 'do {\n${g.body(n)}} while (${g.e(n, 'COND')});',
+        tip: 'Chạy thân vòng lặp ít nhất một lần, rồi lặp tiếp khi điều kiện còn đúng'),
+    BlockSpec('while_true', 'control', Shape.cblock, 'while (true)', {}, (g, n) => 'while (true) {\n${g.body(n)}}',
+        tip: 'Lặp mãi — dùng khối "thoát vòng lặp" (break) để dừng'),
     BlockSpec('until', 'control', Shape.cblock, 'lặp cho đến khi {COND}', {'COND': _bool}, (g, n) => 'while (!${g.e(n, 'COND')}) {\n${g.body(n)}}'),
     BlockSpec('for_lt', 'control', Shape.cblock, 'for (int {VAR} = {FROM}; {VAR2} < {TO}; {VAR3}++)', {
       'VAR': const Slot(SlotKind.varName, 'i'),

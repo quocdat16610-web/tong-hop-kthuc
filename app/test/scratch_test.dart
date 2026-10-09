@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:so_tay_dsa/core/scratch.dart';
 import 'package:so_tay_dsa/core/scratch_templates.dart';
+import 'package:so_tay_dsa/core/vcs.dart' show Json;
 
 // Chạy code sinh ra bằng Node (nếu có) với thư viện viz thật để chắc chắn mẫu chạy đúng.
 Map<String, dynamic>? runNode(String code, String input) {
@@ -86,6 +87,41 @@ void main() {
     expect(r['error'], isNull, reason: code);
     // banana có 3 chữ a; 4+8+15 = 27; 2+3+4 = 9
     expect(((r['frames'] as List).last as Map)['note'], 'dem=3 tong=27 k=9');
+  });
+
+  test('vòng while, do-while, while (true) + break', () {
+    Json v(String n) => newNode('var_get', a: {'VAR': n});
+    final prog = {
+      'v': 2,
+      'vars': <dynamic>['n', 'dem', 'k', 'm'],
+      'funcs': <dynamic>[],
+      'main': <dynamic>[
+        // while (n > 1) { n = n / 2; dem++ }  với n = 64 → dem = 6
+        newNode('var_set', a: {'VAR': 'n', 'X': '64'}),
+        newNode('var_set', a: {'VAR': 'dem', 'X': '0'}),
+        newNode('while', a: {'COND': newNode('compare', a: {'A': v('n'), 'OP': '>', 'B': '1'})})
+          ..['do'] = [
+            newNode('var_set', a: {'VAR': 'n', 'X': newNode('idiv', a: {'A': v('n'), 'B': '2'})}),
+            newNode('var_change', a: {'VAR': 'dem', 'X': '1'}),
+          ],
+        // do { k++ } while (false) → k = 1
+        newNode('var_set', a: {'VAR': 'k', 'X': '0'}),
+        newNode('do_while', a: {'COND': newNode('bool', a: {'V': 'false'})})..['do'] = [newNode('var_change', a: {'VAR': 'k', 'X': '1'})],
+        // while (true) { m++; if (m == 5) break; } → m = 5
+        newNode('var_set', a: {'VAR': 'm', 'X': '0'}),
+        newNode('while_true')
+          ..['do'] = [
+            newNode('var_change', a: {'VAR': 'm', 'X': '1'}),
+            newNode('if', a: {'COND': newNode('compare', a: {'A': v('m'), 'OP': '==', 'B': '5'})})..['do'] = [newNode('break')],
+          ],
+        newNode('step', a: {'X': newNode('js_expr', a: {'CODE': '"dem=" + v_dem + " k=" + v_k + " m=" + v_m'})}),
+      ],
+    };
+    final code = generateJs(prog);
+    if (!hasNode) return;
+    final r = runNode(code, '')!;
+    expect(r['error'], isNull, reason: code);
+    expect(((r['frames'] as List).last as Map)['note'], 'dem=6 k=1 m=5');
   });
 
   test('chuyển khối Blockly của bản cũ', () {
