@@ -1,4 +1,5 @@
 // Hộp thoại và tiện ích giao diện dùng chung.
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -103,17 +104,19 @@ String fullTime(int t) {
 }
 
 /// Lưu file: máy tính → hộp thoại Lưu; Android → bảng chia sẻ (Zalo, Messenger, Drive…).
-Future<void> saveTextFile(BuildContext context, String name, String text) async {
+Future<void> saveTextFile(BuildContext context, String name, String text) => saveBytesFile(context, name, utf8.encode(text));
+
+Future<void> saveBytesFile(BuildContext context, String name, List<int> bytes) async {
   try {
     if (Platform.isAndroid || Platform.isIOS) {
       final dir = await getTemporaryDirectory();
-      final f = File('${dir.path}/$name')..writeAsStringSync(text);
+      final f = File('${dir.path}/$name')..writeAsBytesSync(bytes);
       await SharePlus.instance.share(ShareParams(files: [XFile(f.path)], title: name));
       return;
     }
     final path = await FilePicker.platform.saveFile(dialogTitle: 'Lưu file', fileName: name);
     if (path == null) return;
-    File(path).writeAsStringSync(text);
+    File(path).writeAsBytesSync(bytes);
     if (context.mounted) toast(context, 'Đã lưu $path');
   } catch (e) {
     if (context.mounted) toast(context, 'Không lưu được: $e', error: true);

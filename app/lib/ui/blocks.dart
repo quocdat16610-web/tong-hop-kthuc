@@ -14,6 +14,7 @@ import '../core/storage.dart';
 import '../core/templates.dart';
 import '../core/vcs.dart';
 import 'code_editor.dart';
+import 'extras.dart' show pickSnippet;
 import 'media.dart';
 import 'problem.dart';
 import 'scratch_editor.dart';
@@ -580,6 +581,15 @@ class _CodeBlockState extends State<CodeBlock> {
           icon: const Icon(Icons.download, size: 16),
           label: const Text('Lưu .cpp'),
         ),
+        if (!widget.ro)
+          TextButton.icon(
+            onPressed: () async {
+              final code = await pickSnippet(context);
+              if (code != null) ctl.replaceSelection(code);
+            },
+            icon: const Icon(Icons.library_books_outlined, size: 16),
+            label: const Text('Code mẫu'),
+          ),
         TextButton.icon(
           onPressed: () => openInIde?.call(((b['title'] ?? '') as String).isEmpty ? 'main.cpp' : b['title'] as String, ctl.text),
           icon: const Icon(Icons.terminal, size: 16),

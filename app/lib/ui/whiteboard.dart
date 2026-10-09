@@ -2,6 +2,7 @@
 // Nét vẽ lưu dạng vector trong notebook (nên có lịch sử, commit, merge, chia sẻ như nội dung khác).
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
@@ -289,6 +290,18 @@ class _WhiteboardState extends State<Whiteboard> {
     _save();
   }
 
+  /// Lưu bảng thành ảnh PNG (độ nét gấp đôi).
+  Future<void> _exportPng() async {
+    final h = _height(b);
+    final rec = ui.PictureRecorder();
+    _BoardPainter(_strokes(b), null, (b['bg'] ?? 'grid') as String, 2, h).paint(Canvas(rec), Size(boardWidth * 2, h * 2));
+    final img = await rec.endRecording().toImage((boardWidth * 2).toInt(), (h * 2).toInt());
+    final data = await img.toByteData(format: ui.ImageByteFormat.png);
+    if (data == null || !mounted) return;
+    final name = (b['title'] ?? '').toString().trim().isEmpty ? 'bang-trang' : '${b['title']}'.trim().replaceAll(RegExp(r'[\\/:*?"<>|]+'), '-');
+    await saveBytesFile(context, '$name.png', data.buffer.asUint8List());
+  }
+
   Widget _toolbar() {
     final sel = context.cs.primaryContainer;
     Widget toolBtn(Tool t) => IconButton(
@@ -368,6 +381,12 @@ class _WhiteboardState extends State<Whiteboard> {
           setState(() => b['height'] = (_height(b) + 200).clamp(200, 4000));
           _save();
         },
+      ),
+      IconButton(
+        tooltip: 'Lưu thành ảnh PNG',
+        visualDensity: VisualDensity.compact,
+        icon: const Icon(Icons.image_outlined, size: 20),
+        onPressed: _exportPng,
       ),
       IconButton(
         tooltip: 'Xoá hết',

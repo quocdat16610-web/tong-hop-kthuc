@@ -19,6 +19,7 @@ import '../core/templates.dart';
 import '../core/vcs.dart';
 import 'blocks.dart' show newBlock;
 import 'code_editor.dart';
+import 'extras.dart' show pickSnippet;
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -579,6 +580,16 @@ class _IdeViewState extends State<IdeView> {
             _btn(Icons.zoom_out, 'Chữ nhỏ (Ctrl+-)', () => m.fontZoom(app, -1)),
             _btn(Icons.zoom_in, 'Chữ to (Ctrl+=)', () => m.fontZoom(app, 1)),
             sep,
+            TextButton.icon(
+              onPressed: m.tab == null
+                  ? null
+                  : () async {
+                      final code = await pickSnippet(context);
+                      if (code != null) m.tab!.ctl.replaceSelection(code);
+                    },
+              icon: const Icon(Icons.library_books_outlined, size: 18),
+              label: const Text('Code mẫu'),
+            ),
             TextButton.icon(onPressed: _toNotebook, icon: const Icon(Icons.post_add, size: 18), label: const Text('Đưa vào sổ tay')),
           ],
         ),

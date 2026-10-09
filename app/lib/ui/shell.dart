@@ -10,6 +10,7 @@ import '../core/vcs.dart';
 import 'blocks.dart' as blocks;
 import 'contest.dart';
 import 'board_tab.dart';
+import 'extras.dart';
 import 'ide.dart';
 import 'notebook_view.dart';
 import 'theme.dart';
@@ -68,6 +69,7 @@ class _ShellState extends State<Shell> {
         const SingleActivator(LogicalKeyboardKey.digit1, alt: true): () => app.mode = 'notes',
         const SingleActivator(LogicalKeyboardKey.digit2, alt: true): () => app.mode = 'ide',
         const SingleActivator(LogicalKeyboardKey.digit3, alt: true): () => app.mode = 'board',
+        const SingleActivator(LogicalKeyboardKey.keyK, control: true): () => showQuickSearch(context),
       };
 
   // ---------- Menu desktop ----------
@@ -90,6 +92,8 @@ class _ShellState extends State<Shell> {
           const Divider(),
           item('Nhập (file / link)…', () => importDialog(context, onOpen: _open), icon: Icons.download_outlined),
           item('Thư viện bài tập (GitHub)…', () => showLibraryDialog(context, _open), icon: Icons.cloud_sync_outlined),
+          item('Tìm trong mọi notebook…', () => showQuickSearch(context), sc: const SingleActivator(LogicalKeyboardKey.keyK, control: true), icon: Icons.search),
+          item('Tiến độ luyện tập…', () => showProgress(context), icon: Icons.insights_outlined),
           item('Chia sẻ…', has ? () => shareDialog(context) : null, icon: Icons.share_outlined),
           const Divider(),
           item('Cài đặt…', () => settingsDialog(context), icon: Icons.settings_outlined),
@@ -204,6 +208,8 @@ class _ShellState extends State<Shell> {
             Wrap(spacing: 8, runSpacing: 8, children: [
               FilledButton.icon(onPressed: _newNotebook, icon: const Icon(Icons.add), label: const Text('Notebook mới')),
               OutlinedButton.icon(onPressed: () => showLibraryDialog(context, _open), icon: const Icon(Icons.cloud_sync_outlined), label: const Text('Thư viện bài tập (GitHub)')),
+              OutlinedButton.icon(onPressed: () => showQuickSearch(context), icon: const Icon(Icons.search), label: const Text('Tìm (Ctrl+K)')),
+              OutlinedButton.icon(onPressed: () => showProgress(context), icon: const Icon(Icons.insights_outlined), label: const Text('Tiến độ luyện tập')),
               OutlinedButton.icon(onPressed: () => importDialog(context, onOpen: _open), icon: const Icon(Icons.download_outlined), label: const Text('Nhập file / link')),
               OutlinedButton.icon(onPressed: _openGuide, icon: const Icon(Icons.menu_book_outlined), label: const Text('Sổ hướng dẫn')),
               OutlinedButton.icon(onPressed: () => app.mode = 'ide', icon: const Icon(Icons.code), label: const Text('Mở IDE C++')),
@@ -318,6 +324,8 @@ class _ShellState extends State<Shell> {
                 'contest' => showContestsDialog(context),
                 'list' => Future(a.closeRepo),
                 'library' => showLibraryDialog(context, _open),
+                'search' => showQuickSearch(context),
+                'progress' => showProgress(context),
                 'update' => showUpdateDialog(context),
                 _ => settingsDialog(context),
               },
@@ -329,12 +337,15 @@ class _ShellState extends State<Shell> {
                 const PopupMenuItem(value: 'share', child: Text('Chia sẻ')),
                 const PopupMenuItem(value: 'import', child: Text('Nhập')),
                 const PopupMenuItem(value: 'list', child: Text('Danh sách notebook')),
+                const PopupMenuItem(value: 'search', child: Text('Tìm trong mọi notebook')),
+                const PopupMenuItem(value: 'progress', child: Text('Tiến độ luyện tập')),
                 const PopupMenuItem(value: 'library', child: Text('Thư viện bài tập (GitHub)')),
                 const PopupMenuItem(value: 'update', child: Text('Kiểm tra cập nhật')),
                 const PopupMenuItem(value: 'settings', child: Text('Cài đặt')),
               ],
             ),
           ] else ...[
+            IconButton(tooltip: 'Tìm', onPressed: () => showQuickSearch(context), icon: const Icon(Icons.search)),
             IconButton(tooltip: 'Kiểm tra cập nhật', onPressed: () => showUpdateDialog(context), icon: const Icon(Icons.system_update_alt)),
             IconButton(tooltip: 'Cài đặt', onPressed: () => settingsDialog(context), icon: const Icon(Icons.settings_outlined)),
           ],
