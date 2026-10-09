@@ -1,7 +1,7 @@
 // Thư viện code mẫu C++ cho DSA: chèn nhanh vào IDE hoặc khối code.
 class Snippet {
-  final String name, group, note, code;
-  const Snippet(this.group, this.name, this.note, this.code);
+  final String name, group, note, code, lang;
+  const Snippet(this.group, this.name, this.note, this.code, {this.lang = 'cpp'});
 }
 
 const snippets = <Snippet>[
@@ -238,4 +238,106 @@ long long firstTrue(long long lo, long long hi, function<bool(long long)> ok) {
   Snippet('Toán', 'GCD / LCM', 'Ước chung lớn nhất, bội chung nhỏ nhất', r'''long long gcdll(long long a, long long b) { return b == 0 ? a : gcdll(b, a % b); }
 long long lcmll(long long a, long long b) { return a / gcdll(a, b) * b; }
 '''),
+
+  // ----- Python -----
+  Snippet('Python', 'Khung bài thi (đọc nhanh)', 'sys.stdin.readline + đệ quy sâu', r'''import sys
+input = sys.stdin.readline
+sys.setrecursionlimit(1 << 20)
+
+
+def main():
+    n = int(input())
+    a = list(map(int, input().split()))
+    print(sum(a))
+
+
+main()
+''', lang: 'py'),
+  Snippet('Python', 'BFS (deque)', 'Đường đi ngắn nhất không trọng số — O(n + m)', r'''from collections import deque
+
+
+def bfs(s, g):
+    dist = [-1] * len(g)
+    dist[s] = 0
+    q = deque([s])
+    while q:
+        u = q.popleft()
+        for v in g[u]:
+            if dist[v] == -1:
+                dist[v] = dist[u] + 1
+                q.append(v)
+    return dist
+''', lang: 'py'),
+  Snippet('Python', 'Dijkstra (heapq)', 'Trọng số không âm — O((n + m) log n)', r'''import heapq
+
+
+def dijkstra(s, g):
+    # g[u] = [(v, w), ...]
+    d = [float('inf')] * len(g)
+    d[s] = 0
+    pq = [(0, s)]
+    while pq:
+        du, u = heapq.heappop(pq)
+        if du != d[u]:
+            continue
+        for v, w in g[u]:
+            if du + w < d[v]:
+                d[v] = du + w
+                heapq.heappush(pq, (d[v], v))
+    return d
+''', lang: 'py'),
+  Snippet('Python', 'DSU (hợp nhất tập hợp)', 'find nén đường, union theo kích thước', r'''class DSU:
+    def __init__(self, n):
+        self.p = list(range(n))
+        self.sz = [1] * n
+
+    def find(self, x):
+        while self.p[x] != x:
+            self.p[x] = self.p[self.p[x]]
+            x = self.p[x]
+        return x
+
+    def union(self, a, b):
+        a, b = self.find(a), self.find(b)
+        if a == b:
+            return False
+        if self.sz[a] < self.sz[b]:
+            a, b = b, a
+        self.p[b] = a
+        self.sz[a] += self.sz[b]
+        return True
+''', lang: 'py'),
+  Snippet('Python', 'Tìm kiếm nhị phân (bisect)', 'lower_bound / upper_bound như C++', r'''from bisect import bisect_left, bisect_right
+
+a = [1, 3, 3, 5, 8]
+x = 3
+print(bisect_left(a, x))   # vị trí đầu tiên >= x  (lower_bound)
+print(bisect_right(a, x))  # vị trí đầu tiên > x   (upper_bound)
+print(bisect_right(a, x) - bisect_left(a, x))  # số lần x xuất hiện
+''', lang: 'py'),
+  Snippet('Python', 'Sàng Eratosthenes', 'Số nguyên tố <= n', r'''def sieve(n):
+    prime = [True] * (n + 1)
+    prime[0] = False
+    if n >= 1:
+        prime[1] = False
+    i = 2
+    while i * i <= n:
+        if prime[i]:
+            prime[i * i::i] = [False] * len(range(i * i, n + 1, i))
+        i += 1
+    return prime
+''', lang: 'py'),
+  Snippet('Python', 'Quy hoạch động: LIS', 'Dãy con tăng dài nhất — O(n log n)', r'''from bisect import bisect_left
+
+
+def lis(a):
+    d = []
+    for x in a:
+        i = bisect_left(d, x)
+        if i == len(d):
+            d.append(x)
+        else:
+            d[i] = x
+    return len(d)
+''', lang: 'py'),
 ];

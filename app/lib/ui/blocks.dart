@@ -29,6 +29,7 @@ const blockTypes = [
   ('image', 'Ảnh', Icons.image_outlined),
   ('video', 'Video', Icons.smart_display_outlined),
   ('code', 'Code C++', Icons.code),
+  ('code_py', 'Code Python', Icons.data_object),
   ('sim', 'Mô phỏng', Icons.animation),
   ('board', 'Bảng trắng', Icons.draw_outlined),
   ('problem', 'Bài tập', Icons.assignment_outlined),
@@ -42,6 +43,7 @@ Json newBlock(String kind) {
     'image' => {'id': id, 'type': 'image', 'src': '', 'caption': '', 'width': 'full'},
     'video' => {'id': id, 'type': 'video', 'title': '', 'url': '', 'timestamps': ''},
     'board' => {'id': id, 'type': 'board', 'title': '', 'height': 560, 'bg': 'grid', 'strokes': <dynamic>[]},
+    'code_py' => {'id': id, 'type': 'code', 'lang': 'py', 'title': 'main.py', 'code': pyTemplate, 'stdin': '3\n1 2 3\n'},
     'code' => {'id': id, 'type': 'code', 'title': '', 'code': cppTemplate, 'stdin': ''},
     'sim' => {'id': id, 'type': 'sim', 'mode': 'blocks', 'title': blockTemplates.first.name, 'scratch': blockTemplates.first.program(), 'code': generateJs(blockTemplates.first.program()), 'input': blockTemplates.first.input},
     _ => {'id': id, 'type': 'problem', ...newProblem()},
@@ -486,11 +488,11 @@ class _CodeBlockState extends State<CodeBlock> {
       output = null;
     });
     try {
-      final be = await app.backend();
-      final c = await be.compile(ctl.text);
+      final be = await app.backend(lang: lang);
+      final c = await be.compile(ctl.text, lang: lang);
       if (!c.ok) {
         setState(() {
-          header = 'Lỗi biên dịch · ${be.name}';
+          header = '${lang == 'py' ? 'Lỗi cú pháp Python' : 'Lỗi biên dịch'} · ${be.name}';
           output = c.error;
           outputErr = true;
         });
@@ -499,7 +501,7 @@ class _CodeBlockState extends State<CodeBlock> {
         be.dispose(c.id);
         setState(() {
           if (r.compileError != null) {
-            header = 'Lỗi biên dịch · ${be.name}';
+            header = '${lang == 'py' ? 'Lỗi cú pháp Python' : 'Lỗi biên dịch'} · ${be.name}';
             output = r.compileError;
             outputErr = true;
           } else {
@@ -519,13 +521,30 @@ class _CodeBlockState extends State<CodeBlock> {
     setState(() => running = false);
   }
 
+  /// 'cpp' hoặc 'py'.
+  String get lang => (widget.block['lang'] ?? ('${widget.block['title'] ?? ''}'.endsWith('.py') ? 'py' : 'cpp')) as String;
+  String get ext => lang == 'py' ? 'py' : 'cpp';
+
+  void _setLang(String l) {
+    final b = widget.block;
+    if (l == lang) return;
+    setState(() {
+      b['lang'] = l;
+      final t = '${b['title'] ?? ''}';
+      if (t.isNotEmpty) b['title'] = t.replaceAll(RegExp(r'\.(cpp|py)$'), '') + (l == 'py' ? '.py' : '.cpp');
+      final code = ctl.text.trim();
+      if (code.isEmpty || code == cppTemplate.trim() || code == pyTemplate.trim()) ctl.text = l == 'py' ? pyTemplate : cppTemplate;
+    });
+    context.read<AppState>().edited();
+  }
+
   @override
   Widget build(BuildContext context) {
     final b = widget.block;
     final lines = '\n'.allMatches(ctl.text).length + 1;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Row(children: [
-        Icon(Icons.code, size: 16, color: context.cs.onSurfaceVariant),
+        Icon(lang == 'py' ? Icons.data_object : Icons.code, size: 16, color: context.cs.onSurfaceVariant),
         const SizedBox(width: 6),
         Expanded(
           child: widget.ro
@@ -540,12 +559,21 @@ class _CodeBlockState extends State<CodeBlock> {
                   },
                 ),
         ),
+        if (widget.ro)
+          Text(lang == 'py' ? 'Python' : 'C++', style: context.tt.labelSmall)
+        else
+          SegmentedButton<String>(
+            style: const ButtonStyle(visualDensity: VisualDensity.compact),
+            segments: const [ButtonSegment(value: 'cpp', label: Text('C++')), ButtonSegment(value: 'py', label: Text('Python'))],
+            selected: {lang},
+            onSelectionChanged: (v) => _setLang(v.first),
+          ),
       ]),
       const SizedBox(height: 4),
       Container(
         height: (lines * 20.0 + 24).clamp(80, 460),
         decoration: BoxDecoration(border: Border.all(color: context.cs.outlineVariant), borderRadius: BorderRadius.circular(4)),
-        child: CodeArea(controller: ctl, readOnly: widget.ro),
+        child: CodeArea(controller: ctl, readOnly: widget.ro, lang: lang),
       ),
       ExpansionTile(
         tilePadding: EdgeInsets.zero,
@@ -577,21 +605,21 @@ class _CodeBlockState extends State<CodeBlock> {
           label: const Text('Sao chép'),
         ),
         TextButton.icon(
-          onPressed: () => saveTextFile(context, '${slugify(((b['title'] ?? '') as String).replaceAll('.cpp', '')).replaceAll('file', 'main')}.cpp', ctl.text),
+          onPressed: () => saveTextFile(context, '${slugify(((b['title'] ?? '') as String).replaceAll(RegExp(r'\.(cpp|py)$'), '')).replaceAll('file', 'main')}.$ext', ctl.text),
           icon: const Icon(Icons.download, size: 16),
-          label: const Text('Lưu .cpp'),
+          label: Text('Lưu .$ext'),
         ),
         if (!widget.ro)
           TextButton.icon(
             onPressed: () async {
-              final code = await pickSnippet(context);
+              final code = await pickSnippet(context, lang: lang);
               if (code != null) ctl.replaceSelection(code);
             },
             icon: const Icon(Icons.library_books_outlined, size: 16),
             label: const Text('Code mẫu'),
           ),
         TextButton.icon(
-          onPressed: () => openInIde?.call(((b['title'] ?? '') as String).isEmpty ? 'main.cpp' : b['title'] as String, ctl.text),
+          onPressed: () => openInIde?.call(((b['title'] ?? '') as String).isEmpty ? 'main.$ext' : b['title'] as String, ctl.text),
           icon: const Icon(Icons.terminal, size: 16),
           label: const Text('Mở trong IDE'),
         ),

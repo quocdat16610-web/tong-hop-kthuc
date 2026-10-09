@@ -132,10 +132,26 @@ class AppState extends ChangeNotifier {
 
   bool get canRunLocal => !(Platform.isAndroid || Platform.isIOS);
 
-  Future<Backend> backend() async {
+  CompilerInfo? _python;
+  bool _pyDetected = false;
+
+  Future<CompilerInfo?> detectPython({bool force = false}) async {
+    if (_pyDetected && !force) return _python;
+    _python = await findPython(setting('pythonPath', ''));
+    _pyDetected = true;
+    return _python;
+  }
+
+  /// lang: 'cpp' hoặc 'py'. Ưu tiên chạy trên máy (g++ / Python), không có thì chạy online.
+  Future<Backend> backend({String lang = 'cpp'}) async {
     if (canRunLocal && setting('judgeMode', 'auto') != 'online') {
-      final info = await detectCompiler();
-      if (info != null) return LocalBackend(info.path, setting('cppFlags', '-O2 -std=c++17'));
+      if (lang == 'py') {
+        final py = await detectPython();
+        if (py != null) return LocalBackend('', setting('cppFlags', '-O2 -std=c++17'), python: py.path);
+      } else {
+        final info = await detectCompiler();
+        if (info != null) return LocalBackend(info.path, setting('cppFlags', '-O2 -std=c++17'), python: (await detectPython())?.path);
+      }
     }
     return OnlineBackend(compiler: setting('compiler', 'g132'), flags: setting('cppFlags', '-O2 -std=c++17'));
   }

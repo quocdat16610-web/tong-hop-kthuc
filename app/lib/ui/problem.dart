@@ -98,17 +98,29 @@ class _ProblemViewState extends State<ProblemView> {
   bool busy = false;
 
   Json get b => widget.block;
-  String get draftKey => '${context.read<AppState>().repo?.id}:${b['id']}';
+  String lang = 'cpp'; // ngôn ngữ bài làm: 'cpp' | 'py'
+  String get draftKey => '${context.read<AppState>().repo?.id}:${b['id']}${lang == 'py' ? ':py' : ''}';
+  String get _langKey => '${context.read<AppState>().repo?.id}:${b['id']}:lang';
 
   @override
   void initState() {
     super.initState();
     editor = CodeLineEditingController.fromText(cppTemplate);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final d = Drafts.get(draftKey);
-      if (d != null) editor.text = d;
+      lang = Drafts.get(_langKey) ?? 'cpp';
+      editor.text = Drafts.get(draftKey) ?? (lang == 'py' ? pyTemplate : cppTemplate);
       editor.addListener(() => Drafts.set(draftKey, editor.text));
+      if (mounted) setState(() {});
     });
+  }
+
+  /// Đổi ngôn ngữ bài làm: mỗi ngôn ngữ giữ bản nháp riêng.
+  void _setLang(String l, {String? code}) {
+    if (l == lang && code == null) return;
+    Drafts.set(draftKey, editor.text);
+    setState(() => lang = l);
+    Drafts.set(_langKey, l);
+    editor.text = code ?? Drafts.get(draftKey) ?? (l == 'py' ? pyTemplate : cppTemplate);
   }
 
   @override
@@ -126,8 +138,9 @@ class _ProblemViewState extends State<ProblemView> {
       progress = 'Đang biên dịch…';
     });
     try {
-      final be = await app.backend();
+      final be = await app.backend(lang: lang);
       final r = await judge(
+        lang: lang,
         source: editor.text,
         tests: tests,
         timeLimit: ((b['timeLimit'] ?? 1000) as num).toInt(),
@@ -138,7 +151,7 @@ class _ProblemViewState extends State<ProblemView> {
       if (!samplesOnly && r.verdict != 'NT') {
         Storage.I.addSub({
           'id': newId(), 'repoId': app.repo?.id, 'contestId': widget.contestId, 'problemId': b['id'], 'user': app.authorOr,
-          'time': now(), 'verdict': r.verdict, 'test': r.test, 'timeMs': r.timeMs, 'code': editor.text,
+          'time': now(), 'verdict': r.verdict, 'test': r.test, 'timeMs': r.timeMs, 'code': editor.text, 'lang': lang,
         });
         widget.onSubmitted?.call();
       }
@@ -187,12 +200,20 @@ class _ProblemViewState extends State<ProblemView> {
           ),
       ],
       const Divider(height: 28),
-      Text('Bài làm (C++)', style: context.tt.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+      Row(children: [
+        Expanded(child: Text('Bài làm', style: context.tt.titleSmall?.copyWith(fontWeight: FontWeight.w700))),
+        SegmentedButton<String>(
+          style: const ButtonStyle(visualDensity: VisualDensity.compact),
+          segments: const [ButtonSegment(value: 'cpp', label: Text('C++')), ButtonSegment(value: 'py', label: Text('Python'))],
+          selected: {lang},
+          onSelectionChanged: busy ? null : (v) => _setLang(v.first),
+        ),
+      ]),
       const SizedBox(height: 6),
       Container(
         height: 300,
         decoration: BoxDecoration(border: Border.all(color: context.cs.outline), borderRadius: BorderRadius.circular(4)),
-        child: CodeArea(controller: editor),
+        child: CodeArea(controller: editor, lang: lang),
       ),
       const SizedBox(height: 8),
       Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
@@ -212,7 +233,7 @@ class _ProblemViewState extends State<ProblemView> {
                 Padding(padding: const EdgeInsets.all(4), child: Text(timeAgo(s['time'] as int), style: context.tt.bodySmall)),
                 VerdictText(s['verdict'] as String, s['test'] as int?),
                 Text(s['verdict'] == 'CE' ? '' : '${s['timeMs']} ms', style: context.tt.bodySmall),
-                TextButton(onPressed: () => editor.text = (s['code'] ?? '') as String, child: const Text('Mở lại code')),
+                TextButton(onPressed: () => _setLang((s['lang'] ?? 'cpp') as String, code: (s['code'] ?? '') as String), child: Text(s['lang'] == 'py' ? 'Mở lại (Python)' : 'Mở lại code')),
               ]),
           ],
         ),
@@ -267,7 +288,7 @@ class _ProblemEditorState extends State<ProblemEditor> {
   @override
   void initState() {
     super.initState();
-    refCtl = CodeLineEditingController.fromText((b['reference'] ?? cppTemplate) as String);
+    refCtl = CodeLineEditingController.fromText((b['reference'] ?? (b['refLang'] == 'py' ? pyTemplate : cppTemplate)) as String);
     genCtl = CodeLineEditingController.fromText((b['generator'] ?? genTemplate) as String);
     refCtl.addListener(() => _set('reference', refCtl.text));
     genCtl.addListener(() => _set('generator', genCtl.text));
@@ -279,6 +300,20 @@ class _ProblemEditorState extends State<ProblemEditor> {
     genCtl.dispose();
     super.dispose();
   }
+
+  String get refLang => (b['refLang'] ?? 'cpp') as String;
+  String get genLang => (b['genLang'] ?? 'cpp') as String;
+
+  /// Chọn ngôn ngữ cho code chuẩn / generator.
+  Widget _langPicker(String key) => Align(
+        alignment: Alignment.centerLeft,
+        child: SegmentedButton<String>(
+          style: const ButtonStyle(visualDensity: VisualDensity.compact),
+          segments: const [ButtonSegment(value: 'cpp', label: Text('C++')), ButtonSegment(value: 'py', label: Text('Python'))],
+          selected: {(b[key] ?? 'cpp') as String},
+          onSelectionChanged: (v) => setState(() => _set(key, v.first)),
+        ),
+      );
 
   void _set(String k, Object? v) {
     if (b[k] == v) return;
@@ -365,8 +400,8 @@ class _ProblemEditorState extends State<ProblemEditor> {
             label: const Text('Tạo output bằng code chuẩn'),
             onPressed: () => _busy('Đang chạy code chuẩn…', () async {
               if (tests.isEmpty) throw Exception('Chưa có test nào.');
-              final be = await app.backend();
-              final outs = await runAll(refCtl.text, tests.map((t) => '${t['input'] ?? ''}').toList(), be,
+              final be = await app.backend(lang: refLang);
+              final outs = await runAll(refCtl.text, tests.map((t) => '${t['input'] ?? ''}').toList(), be, lang: refLang,
                   onProgress: (i, n) => mounted ? setState(() => status = 'Code chuẩn: $i/$n') : null);
               for (var i = 0; i < outs.length; i++) {
                 tests[i]['output'] = outs[i];
@@ -393,15 +428,18 @@ class _ProblemEditorState extends State<ProblemEditor> {
       if (tab == 2) ...[
         Text('Code chuẩn dùng để tạo output cho test. Khi xuất đề cho thí sinh, code chuẩn được bỏ đi.', style: context.tt.bodySmall),
         const SizedBox(height: 6),
-        Container(height: 320, decoration: BoxDecoration(border: Border.all(color: context.cs.outline)), child: CodeArea(controller: refCtl)),
+        _langPicker('refLang'),
+        const SizedBox(height: 6),
+        Container(height: 320, decoration: BoxDecoration(border: Border.all(color: context.cs.outline)), child: CodeArea(controller: refCtl, lang: refLang)),
         const SizedBox(height: 8),
         Row(children: [
           OutlinedButton.icon(
             icon: const Icon(Icons.play_arrow, size: 18),
             label: const Text('Chấm thử code chuẩn với các test'),
             onPressed: () => _busy('Đang chấm…', () async {
-              final be = await app.backend();
+              final be = await app.backend(lang: refLang);
               final r = await judge(
+                lang: refLang,
                 source: refCtl.text,
                 tests: tests,
                 timeLimit: ((b['timeLimit'] ?? 1000) as num).toInt(),
@@ -424,7 +462,9 @@ class _ProblemEditorState extends State<ProblemEditor> {
         Text('Viết chương trình C++ in ra một bộ input ngẫu nhiên từ seed. App chạy generator với seed 1…N rồi chạy code chuẩn để có output. Test mới được thêm vào cuối danh sách.',
             style: context.tt.bodySmall),
         const SizedBox(height: 6),
-        Container(height: 300, decoration: BoxDecoration(border: Border.all(color: context.cs.outline)), child: CodeArea(controller: genCtl)),
+        _langPicker('genLang'),
+        const SizedBox(height: 6),
+        Container(height: 300, decoration: BoxDecoration(border: Border.all(color: context.cs.outline)), child: CodeArea(controller: genCtl, lang: genLang)),
         const SizedBox(height: 8),
         Wrap(spacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
           const Text('Số test:'),
@@ -437,11 +477,10 @@ class _ProblemEditorState extends State<ProblemEditor> {
             label: const Text('Sinh test'),
             onPressed: () => _busy('Đang sinh input…', () async {
               final n = ((b['genCount'] ?? 10) as num).toInt().clamp(1, 200);
-              final be = await app.backend();
               final start = tests.length + 1;
               final seeds = List.generate(n, (i) => '${start + i}');
-              final inputs = await runAll(genCtl.text, seeds, be, onProgress: (i, k) => mounted ? setState(() => status = 'Generator: $i/$k') : null);
-              final outs = await runAll(refCtl.text, inputs, be, onProgress: (i, k) => mounted ? setState(() => status = 'Code chuẩn: $i/$k') : null);
+              final inputs = await runAll(genCtl.text, seeds, await app.backend(lang: genLang), lang: genLang, onProgress: (i, k) => mounted ? setState(() => status = 'Generator: $i/$k') : null);
+              final outs = await runAll(refCtl.text, inputs, await app.backend(lang: refLang), lang: refLang, onProgress: (i, k) => mounted ? setState(() => status = 'Code chuẩn: $i/$k') : null);
               for (var i = 0; i < inputs.length; i++) {
                 (b['tests'] as List).add({'input': inputs[i], 'output': outs[i], 'sample': false});
               }

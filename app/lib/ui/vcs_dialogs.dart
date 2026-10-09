@@ -704,6 +704,7 @@ Future<void> settingsDialog(BuildContext context) async {
   final flags = TextEditingController(text: app.setting('cppFlags', '-O2 -std=c++17'));
   final compiler = TextEditingController(text: app.setting('compiler', 'g132'));
   final gpp = TextEditingController(text: app.setting('gppPath', ''));
+  final pyPath = TextEditingController(text: app.setting('pythonPath', ''));
   var theme = app.setting('theme', 'system');
   var mode = app.setting('judgeMode', 'auto');
   String info = '';
@@ -712,9 +713,12 @@ Future<void> settingsDialog(BuildContext context) async {
     setSt(() => info = 'Đang tìm g++…');
     final r = await app.detectCompiler(force: true);
     final gdb = r == null ? null : await findGdb(r.path);
-    setSt(() => info = r == null
-        ? 'Không tìm thấy g++. Code sẽ chạy online. Cài MinGW-w64 / MSYS2 (Windows), Xcode Command Line Tools (macOS) hoặc g++ (Linux), hoặc chọn file g++.'
-        : 'g++: ${r.version}\n${r.path}\ngdb: ${gdb?.version ?? 'không có (không gỡ lỗi từng dòng được)'}');
+    app.setSetting('pythonPath', pyPath.text.trim());
+    final py = await app.detectPython(force: true);
+    setSt(() => info = (r == null
+            ? 'Không tìm thấy g++. Code sẽ chạy online. Cài MinGW-w64 / MSYS2 (Windows), Xcode Command Line Tools (macOS) hoặc g++ (Linux), hoặc chọn file g++.'
+            : 'g++: ${r.version}\n${r.path}\ngdb: ${gdb?.version ?? 'không có (không gỡ lỗi từng dòng được)'}') +
+        (py == null ? '\nPython: không tìm thấy (code Python sẽ chạy online)' : '\nPython: ${py.version}\n${py.path}'));
   }
 
   var started = false;
@@ -737,14 +741,14 @@ Future<void> settingsDialog(BuildContext context) async {
           onSelectionChanged: (v) => setSt(() => theme = v.first),
         ),
         const Divider(height: 28),
-        Text('Chạy & chấm code C++', style: c.tt.titleSmall),
+        Text('Chạy & chấm code C++ / Python', style: c.tt.titleSmall),
         const SizedBox(height: 8),
         if (app.canRunLocal)
           DropdownButtonFormField<String>(
             initialValue: mode,
             decoration: const InputDecoration(labelText: 'Nơi chạy code'),
             items: const [
-              DropdownMenuItem(value: 'auto', child: Text('g++ trên máy (nếu có), không thì online')),
+              DropdownMenuItem(value: 'auto', child: Text('g++ / Python trên máy (nếu có), không thì online')),
               DropdownMenuItem(value: 'online', child: Text('Luôn chạy online (Compiler Explorer)')),
             ],
             onChanged: (v) => mode = v ?? 'auto',
@@ -774,6 +778,22 @@ Future<void> settingsDialog(BuildContext context) async {
               child: const Text('Chọn file g++…'),
             ),
           ]),
+          const SizedBox(height: 8),
+          TextField(controller: pyPath, decoration: const InputDecoration(labelText: 'Đường dẫn Python 3 (để trống để tự tìm)'), style: TextStyle(fontFamily: monoFont)),
+          const SizedBox(height: 6),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton(
+              onPressed: () async {
+                final r = await FilePicker.platform.pickFiles(dialogTitle: 'Chọn file python');
+                if (r?.files.single.path != null) {
+                  pyPath.text = r!.files.single.path!;
+                  detect(setSt);
+                }
+              },
+              child: const Text('Chọn file python…'),
+            ),
+          ),
         ],
         const Divider(height: 28),
         Text('Sao lưu dữ liệu', style: c.tt.titleSmall),
@@ -807,6 +827,7 @@ Future<void> settingsDialog(BuildContext context) async {
           app.setSetting('cppFlags', flags.text.trim());
           app.setSetting('compiler', compiler.text.trim().isEmpty ? 'g132' : compiler.text.trim());
           app.setSetting('gppPath', gpp.text.trim());
+          app.setSetting('pythonPath', pyPath.text.trim());
           Navigator.pop(c);
         },
         child: const Text('Lưu'),

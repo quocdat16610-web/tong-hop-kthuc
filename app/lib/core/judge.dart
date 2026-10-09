@@ -27,7 +27,8 @@ abstract class Backend {
   String get name;
   bool get local;
   int get parallel;
-  Future<CompileResult> compile(String source, {String? includeDir, bool debug = false, bool unbuffered = false});
+  /// lang: 'cpp' (C++) hoặc 'py' (Python).
+  Future<CompileResult> compile(String source, {String? includeDir, bool debug = false, bool unbuffered = false, String lang = 'cpp'});
   Future<RunResult> run(String id, String input, int timeLimitMs);
   void dispose(String id);
 }
@@ -101,10 +102,11 @@ Future<JudgeResult> judge({
   int timeLimit = 1000,
   String checker = 'tokens',
   required Backend backend,
+  String lang = 'cpp',
   void Function(int done, int total)? onProgress,
 }) async {
   if (tests.isEmpty) return JudgeResult('NT');
-  final comp = await backend.compile(source);
+  final comp = await backend.compile(source, lang: lang);
   if (!comp.ok) return JudgeResult('CE', message: comp.error);
   final results = List<({String verdict, RunResult r})?>.filled(tests.length, null);
   var firstBad = 1 << 30;
@@ -145,8 +147,8 @@ Future<JudgeResult> judge({
 }
 
 // Chạy chương trình với nhiều input (sinh test bằng generator / tạo output bằng code chuẩn).
-Future<List<String>> runAll(String source, List<String> inputs, Backend backend, {int timeLimit = 5000, void Function(int, int)? onProgress}) async {
-  final comp = await backend.compile(source);
+Future<List<String>> runAll(String source, List<String> inputs, Backend backend, {int timeLimit = 5000, String lang = 'cpp', void Function(int, int)? onProgress}) async {
+  final comp = await backend.compile(source, lang: lang);
   if (!comp.ok) throw Exception('Lỗi biên dịch:\n${comp.error}');
   final out = List<String>.filled(inputs.length, '');
   var done = 0;

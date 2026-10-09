@@ -33,7 +33,7 @@ class IdeTab {
   final FocusNode focus = FocusNode();
   IdeTab({required this.name, this.path, this.fileId, required String code, String? savedText}) : ctl = CodeLineEditingController.fromText(code), saved = savedText ?? code;
   bool get dirty => ctl.text != saved;
-  String get lang => name.endsWith('.js') ? 'js' : 'cpp';
+  String get lang => name.endsWith('.js') ? 'js' : name.endsWith('.py') ? 'py' : 'cpp';
   void dispose() {
     ctl.dispose();
     marks.dispose();
@@ -48,10 +48,25 @@ class BuildMsg {
 }
 
 final _msgRe = RegExp(r'^(.*?):(\d+):(\d+): (fatal error|error|warning|note): (.*)$');
-List<BuildMsg> parseBuildLog(String log) => [
-  for (final l in const LineSplitter().convert(log))
-    if (_msgRe.firstMatch(l) case final m?) BuildMsg(p.basename(m[1]!), int.parse(m[2]!), int.parse(m[3]!), m[4]!.replaceFirst('fatal ', ''), m[5]!),
-];
+final _pyRe = RegExp(r'^\s*File "(.*?)", line (\d+)');
+
+List<BuildMsg> parseBuildLog(String log) {
+  final lines = const LineSplitter().convert(log);
+  final out = <BuildMsg>[
+    for (final l in lines)
+      if (_msgRe.firstMatch(l) case final m?) BuildMsg(p.basename(m[1]!), int.parse(m[2]!), int.parse(m[3]!), m[4]!.replaceFirst('fatal ', ''), m[5]!),
+  ];
+  // Lỗi Python: dòng 'File "main.py", line N' (lấy dòng cuối cùng của traceback) + câu báo lỗi ở cuối.
+  final last = lines.lastWhere((l) => RegExp(r'^\w*(Error|Exception)\b').hasMatch(l.trim()), orElse: () => '');
+  for (var i = lines.length - 1; i >= 0; i--) {
+    final m = _pyRe.firstMatch(lines[i]);
+    if (m != null) {
+      out.add(BuildMsg(p.basename(m[1]!.replaceAll('\\', '/')), int.parse(m[2]!), 1, 'error', last.isEmpty ? 'Lỗi Python' : last.trim()));
+      break;
+    }
+  }
+  return out;
+}
 
 /// Trạng thái IDE (giữ lại khi chuyển qua lại giữa Sổ tay và IDE).
 class IdeModel extends ChangeNotifier {
@@ -122,12 +137,12 @@ class IdeModel extends ChangeNotifier {
     _persist();
   }
 
-  void newFile([String? name, String code = ideNewCode]) {
-    var n = name ?? 'main.cpp';
+  void newFile([String? name, String code = ideNewCode, String ext = 'cpp']) {
+    var n = name ?? 'main.$ext';
     if (name == null) {
       var k = 1;
       while (tabs.any((t) => t.name == n)) {
-        n = 'main${++k}.cpp';
+        n = 'main${++k}.$ext';
       }
     }
     _add(IdeTab(name: n, code: code, savedText: ''));
@@ -177,7 +192,7 @@ class IdeModel extends ChangeNotifier {
         _persist();
         return true;
       }
-      final path = await FilePicker.platform.saveFile(dialogTitle: 'Lưu file', fileName: t.name, initialDirectory: folder, type: FileType.custom, allowedExtensions: ['cpp', 'h', 'hpp', 'c', 'txt']);
+      final path = await FilePicker.platform.saveFile(dialogTitle: 'Lưu file', fileName: t.name, initialDirectory: folder, type: FileType.custom, allowedExtensions: ['cpp', 'py', 'h', 'hpp', 'c', 'txt']);
       if (path == null) return false;
       t.path = path;
       t.name = p.basename(path);
@@ -220,10 +235,10 @@ class IdeModel extends ChangeNotifier {
         if (info == null) throw Exception('Cần g++ trên máy để gỡ lỗi. Xem Cài đặt.');
         be = LocalBackend(info.path, app.setting('cppFlags', '-O2 -std=c++17'));
       } else {
-        be = await app.backend();
+        be = await app.backend(lang: t.lang == 'py' ? 'py' : 'cpp');
       }
       final dir = t.path != null ? p.dirname(t.path!) : folder;
-      final r = await be.compile(t.ctl.text, includeDir: dir, debug: debug, unbuffered: true);
+      final r = await be.compile(t.ctl.text, includeDir: dir, debug: debug, unbuffered: true, lang: t.lang == 'py' ? 'py' : 'cpp');
       final text = r.ok ? r.warnings : r.error;
       buildLog =
           '-------------- Build: ${t.name} (${be.name}) --------------\n${text.trim().isEmpty ? '' : '${text.trimRight()}\n'}'
@@ -252,7 +267,7 @@ class IdeModel extends ChangeNotifier {
     final t = tab!;
     final errs = {
       for (final m in msgs)
-        if (m.kind == 'error' && m.file == 'main.cpp') m.line - 1,
+        if (m.kind == 'error' && (m.file == 'main.cpp' || m.file == 'main.py')) m.line - 1,
     };
     t.marks.value = t.marks.value.copyWith(errors: errs);
   }
@@ -290,6 +305,14 @@ class IdeModel extends ChangeNotifier {
         final code = await pr.exitCode;
         await Future.wait([o, e]).catchError((_) => <void>[]);
         if (proc == pr) {
+          // Python lỗi khi chạy: đánh dấu dòng gây lỗi trong traceback để bấm vào là nhảy tới.
+          if (code != 0 && tab?.lang == 'py') {
+            final ms = parseBuildLog(console).where((m) => m.file == 'main.py').toList();
+            if (ms.isNotEmpty) {
+              msgs = ms;
+              tab!.marks.value = tab!.marks.value.copyWith(errors: {ms.last.line - 1});
+            }
+          }
           log('\n\n[Chương trình kết thúc · mã thoát $code · ${sw.elapsedMilliseconds} ms]\n');
           setStatus(code == 0 ? 'Chạy xong' : 'Chương trình lỗi (mã thoát $code)');
           proc = null;
@@ -352,6 +375,12 @@ class IdeModel extends ChangeNotifier {
   // ---------- Gỡ lỗi ----------
   Future<void> debug(AppState app) async {
     if (dbg != null) return dbgControl('continue');
+    if (tab?.lang == 'py') {
+      buildLog = 'Gỡ lỗi từng dòng hiện hỗ trợ C++ (gdb). Với Python, hãy dùng print() để xem giá trị biến, hoặc bấm F9 để chạy.\n';
+      bottomTab = 2;
+      notifyListeners();
+      return;
+    }
     final info = await app.detectCompiler();
     final gdb = info == null ? null : await findGdb(info.path);
     if (gdb == null) {
@@ -561,7 +590,8 @@ class _IdeViewState extends State<IdeView> {
               _btn(Icons.folder_outlined, 'Các file', () => _filesSheet(m))
             else
               _btn(explorer ? Icons.vertical_split : Icons.vertical_split_outlined, 'Ẩn/hiện danh sách file', () => setState(() => explorer = !explorer)),
-            _btn(Icons.note_add_outlined, 'File mới (Ctrl+N)', () => m.newFile()),
+            _btn(Icons.note_add_outlined, 'File C++ mới (Ctrl+N)', () => m.newFile()),
+            _btn(Icons.data_object, 'File Python mới', () => m.newFile(null, pyIdeNewCode, 'py')),
             _btn(Icons.file_open_outlined, 'Mở file (Ctrl+O)', _open),
             _btn(Icons.save_outlined, 'Lưu (Ctrl+S)', m.tab == null ? null : () => m.save(m.tab!)),
             sep,
@@ -584,7 +614,7 @@ class _IdeViewState extends State<IdeView> {
               onPressed: m.tab == null
                   ? null
                   : () async {
-                      final code = await pickSnippet(context);
+                      final code = await pickSnippet(context, lang: m.tab!.lang == 'py' ? 'py' : 'cpp');
                       if (code != null) m.tab!.ctl.replaceSelection(code);
                     },
               icon: const Icon(Icons.library_books_outlined, size: 18),
@@ -655,7 +685,7 @@ class _IdeViewState extends State<IdeView> {
             Directory(m.folder!)
                 .listSync(recursive: true)
                 .whereType<File>()
-                .where((f) => RegExp(r'\.(cpp|cc|c|h|hpp|txt|in|out|inp)$', caseSensitive: false).hasMatch(f.path) && !f.path.contains('${p.separator}.'))
+                .where((f) => RegExp(r'\.(cpp|cc|c|h|hpp|py|txt|in|out|inp)$', caseSensitive: false).hasMatch(f.path) && !f.path.contains('${p.separator}.'))
                 .take(300)
                 .toList()
               ..sort((a, b) => a.path.compareTo(b.path));

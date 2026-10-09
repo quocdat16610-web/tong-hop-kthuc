@@ -11,15 +11,16 @@ import 'theme.dart';
 import 'widgets.dart';
 
 // ---------- Thư viện code mẫu ----------
-Future<String?> pickSnippet(BuildContext context) {
+Future<String?> pickSnippet(BuildContext context, {String lang = 'cpp'}) {
   var q = '';
-  Snippet? sel = snippets.first;
+  final pool = snippets.where((s) => s.lang == lang).toList();
+  Snippet? sel = pool.firstOrNull;
   return showPanel<String>(
     context,
-    title: 'Thư viện code mẫu C++',
+    title: lang == 'py' ? 'Thư viện code mẫu Python' : 'Thư viện code mẫu C++',
     width: 1000,
     builder: (c, setSt) {
-      final list = snippets.where((s) => q.isEmpty || '${s.group} ${s.name} ${s.note}'.toLowerCase().contains(q.toLowerCase())).toList();
+      final list = pool.where((s) => q.isEmpty || '${s.group} ${s.name} ${s.note}'.toLowerCase().contains(q.toLowerCase())).toList();
       if (!list.contains(sel)) sel = list.firstOrNull;
       final groups = <String>{for (final s in list) s.group};
       final listView = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [

@@ -59,6 +59,30 @@ Future<CompilerInfo?> findCompiler(String? custom) async {
   return null;
 }
 
+/// Python: bản đi kèm app (Windows: <thư mục app>/python/python.exe), hoặc python3 / python trên máy.
+List<String> pythonCandidates(String? custom) => [
+      if (custom != null && custom.isNotEmpty) custom,
+      p.join(appDir, 'python', isWin ? 'python.exe' : 'bin/python3'),
+      if (!isWin) 'python3',
+      isWin ? 'python.exe' : 'python',
+      if (isWin)
+        for (final v in ['313', '312', '311', '310']) ...[
+          if (Platform.environment['LOCALAPPDATA'] != null) p.join(Platform.environment['LOCALAPPDATA']!, 'Programs', 'Python', 'Python$v', 'python.exe'),
+          if (Platform.environment['ProgramFiles'] != null) p.join(Platform.environment['ProgramFiles']!, 'Python$v', 'python.exe'),
+        ],
+    ];
+
+Future<CompilerInfo?> findPython(String? custom) async {
+  if (Platform.isAndroid || Platform.isIOS) return null;
+  for (final c in pythonCandidates(custom)) {
+    if (p.isAbsolute(c) && !File(c).existsSync()) continue;
+    final v = await _version(c);
+    // Bỏ qua "python" giả của Microsoft Store (in ra lời nhắc cài đặt thay vì phiên bản).
+    if (v != null && v.startsWith('Python 3')) return CompilerInfo(c, v);
+  }
+  return null;
+}
+
 Future<CompilerInfo?> findGdb(String? gppPath) async {
   if (Platform.isAndroid || Platform.isIOS) return null;
   final cands = <String>[];
@@ -77,14 +101,17 @@ List<String> splitFlags(String s) =>
 
 class Program {
   final String dir, exe, src, gppDir;
-  Program(this.dir, this.exe, this.src, this.gppDir);
+  final List<String> args;
+  final bool python;
+  Program(this.dir, this.exe, this.src, this.gppDir, {this.args = const [], this.python = false});
 }
 
 /// Chấm / chạy bằng g++ trên máy.
 class LocalBackend implements Backend {
   final String gpp;
   final String flags;
-  LocalBackend(this.gpp, this.flags);
+  final String? python;
+  LocalBackend(this.gpp, this.flags, {this.python});
 
   static final Map<String, Program> programs = {};
   static Directory get work => Directory(p.join(Directory.systemTemp.path, 'so-tay-dsa-judge'));
@@ -114,7 +141,8 @@ class LocalBackend implements Backend {
   }
 
   @override
-  Future<CompileResult> compile(String source, {String? includeDir, bool debug = false, bool unbuffered = false}) async {
+  Future<CompileResult> compile(String source, {String? includeDir, bool debug = false, bool unbuffered = false, String lang = 'cpp'}) async {
+    if (lang == 'py') return _compilePython(source, includeDir);
     final id = newId();
     final dir = Directory(p.join(work.path, id))..createSync(recursive: true);
     final src = p.join(dir.path, 'main.cpp');
@@ -144,10 +172,51 @@ class LocalBackend implements Backend {
     }
   }
 
+  /// Python không cần biên dịch: chỉ kiểm tra cú pháp (lỗi cú pháp → "Compilation error" như Codeforces).
+  Future<CompileResult> _compilePython(String source, String? includeDir) async {
+    final py = python;
+    if (py == null) return CompileResult.fail('Không tìm thấy Python trên máy. Cài Python 3 (python.org) hoặc chọn đường dẫn trong Cài đặt.');
+    final id = newId();
+    final dir = Directory(p.join(work.path, id))..createSync(recursive: true);
+    final src = p.join(dir.path, 'main.py');
+    File(src).writeAsStringSync(source);
+    // Cho phép import file .py cạnh file đang mở (giống -I của C++).
+    if (includeDir != null && Directory(includeDir).existsSync()) {
+      for (final f in Directory(includeDir).listSync().whereType<File>().where((f) => f.path.endsWith('.py'))) {
+        final dst = p.join(dir.path, p.basename(f.path));
+        if (!File(dst).existsSync()) f.copySync(dst);
+      }
+    }
+    try {
+      final r = await Process.run(py, ['-c', 'import ast,sys; ast.parse(open(sys.argv[1], encoding="utf-8").read(), "main.py")', src], workingDirectory: dir.path, environment: _pyEnv())
+          .timeout(const Duration(seconds: 30));
+      if (r.exitCode != 0) {
+        dir.deleteSync(recursive: true);
+        return CompileResult.fail(_pyError('${r.stderr}'));
+      }
+    } on TimeoutException {
+      return CompileResult.fail('Kiểm tra cú pháp Python quá lâu.');
+    } catch (e) {
+      return CompileResult.fail('Không chạy được Python: $e');
+    }
+    programs[id] = Program(dir.path, py, src, p.dirname(py), args: ['-u', 'main.py'], python: true);
+    return CompileResult.ok(id);
+  }
+
+  static Map<String, String> _pyEnv() => {...Platform.environment, 'PYTHONIOENCODING': 'utf-8', 'PYTHONUTF8': '1', 'PYTHONDONTWRITEBYTECODE': '1'};
+
+  /// Gọn thông báo lỗi Python: bỏ dòng traceback nội bộ của trình kiểm tra.
+  static String _pyError(String err) {
+    final lines = const LineSplitter().convert(err);
+    final i = lines.indexWhere((l) => l.contains('File "main.py"'));
+    return (i >= 0 ? lines.sublist(i) : lines).join('\n').trim();
+  }
+
   Future<Process> spawn(String id) {
     final prog = programs[id];
     if (prog == null) throw StateError('Chương trình chưa được biên dịch');
-    return Process.start(prog.exe, [], workingDirectory: prog.dir, environment: _env(prog.gppDir));
+    if (prog.python) return Process.start(prog.exe, prog.args, workingDirectory: prog.dir, environment: _pyEnv());
+    return Process.start(prog.exe, prog.args, workingDirectory: prog.dir, environment: _env(prog.gppDir));
   }
 
   @override
@@ -220,6 +289,23 @@ class OnlineBackend implements Backend {
   final String compiler, flags;
   OnlineBackend({this.compiler = 'g132', this.flags = '-O2 -std=c++17'});
   static final Map<String, String> _sources = {};
+  static final Map<String, String> _langs = {};
+  static String? _pyCompiler;
+
+  /// Chọn trình thông dịch Python mới nhất có hỗ trợ chạy trên Compiler Explorer.
+  static Future<String> pythonCompiler() async {
+    if (_pyCompiler != null) return _pyCompiler!;
+    try {
+      final r = await http.get(Uri.parse('https://godbolt.org/api/compilers/python?fields=id,name,supportsExecute'), headers: {'Accept': 'application/json'}).timeout(const Duration(seconds: 20));
+      final list = (jsonDecode(utf8.decode(r.bodyBytes)) as List).cast<Map>().where((c) => c['supportsExecute'] == true).map((c) => '${c['id']}').toList()..sort();
+      final best = list.where((x) => RegExp(r'^python3\d+$').hasMatch(x)).toList()
+        ..sort((a, b) => int.parse(a.substring(7)).compareTo(int.parse(b.substring(7))));
+      _pyCompiler = best.isNotEmpty ? best.last : (list.isNotEmpty ? list.last : 'python312');
+    } catch (_) {
+      _pyCompiler = 'python312';
+    }
+    return _pyCompiler!;
+  }
 
   @override
   String get name => 'Compiler Explorer (online)';
@@ -229,28 +315,31 @@ class OnlineBackend implements Backend {
   int get parallel => 3;
 
   @override
-  Future<CompileResult> compile(String source, {String? includeDir, bool debug = false, bool unbuffered = false}) async {
+  Future<CompileResult> compile(String source, {String? includeDir, bool debug = false, bool unbuffered = false, String lang = 'cpp'}) async {
     final id = newId();
     _sources[id] = source;
+    _langs[id] = lang;
     return CompileResult.ok(id);
   }
 
   @override
   Future<RunResult> run(String id, String input, int timeLimitMs) async {
+    final py = _langs[id] == 'py';
+    final comp = py ? await pythonCompiler() : compiler;
     final res = await http
-        .post(Uri.parse('https://godbolt.org/api/compiler/${Uri.encodeComponent(compiler)}/compile'),
+        .post(Uri.parse('https://godbolt.org/api/compiler/${Uri.encodeComponent(comp)}/compile'),
             headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
             body: jsonEncode({
               'source': _sources[id] ?? '',
               'options': {
-                'userArguments': flags,
+                'userArguments': py ? '' : flags,
                 'executeParameters': {'args': [], 'stdin': input},
                 'compilerOptions': {'executorRequest': true},
                 'filters': {'execute': true},
                 'tools': [],
                 'libraries': [],
               },
-              'lang': 'c++',
+              'lang': py ? 'python' : 'c++',
               'allowStoreCodeDebug': false,
             }))
         .timeout(const Duration(seconds: 60));
@@ -275,5 +364,8 @@ class OnlineBackend implements Backend {
   }
 
   @override
-  void dispose(String id) => _sources.remove(id);
+  void dispose(String id) {
+    _sources.remove(id);
+    _langs.remove(id);
+  }
 }

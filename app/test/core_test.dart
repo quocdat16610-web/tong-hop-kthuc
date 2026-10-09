@@ -18,6 +18,18 @@ Repo setup() {
   return r;
 }
 
+/// Python 3 để kiểm thử: biến môi trường SOTAY_TEST_PYTHON (CI Windows dùng Python đóng gói) hoặc python3 / python.
+final String? testPython = () {
+  for (final c in [Platform.environment['SOTAY_TEST_PYTHON'], 'python3', 'python']) {
+    if (c == null || c.isEmpty) continue;
+    try {
+      final r = Process.runSync(c, ['--version']);
+      if (r.exitCode == 0 && '${r.stdout}${r.stderr}'.startsWith('Python 3')) return c;
+    } catch (_) {}
+  }
+  return null;
+}();
+
 bool hasTool(String t) {
   try {
     return Process.runSync(t, ['--version']).exitCode == 0;
@@ -156,6 +168,28 @@ void main() {
       expect(ce.message, contains('main.cpp'));
       expect((await runAll(sum, ['2 2', '3 4'], be)).map((s) => s.trim()), ['4', '7']);
     }, skip: !hasTool('g++'));
+
+    test('chấm Python: AC / WA / TLE / RE / CE', () async {
+      final be = LocalBackend('', '', python: testPython);
+      const sum = 'a, b = map(int, input().split())\nprint(a + b)\n';
+      final tests = [
+        {'input': '1 2', 'output': '3'},
+        {'input': '2000000000 2000000000', 'output': '4000000000'},
+      ];
+      expect((await judge(lang: 'py', source: sum, tests: tests, backend: be)).verdict, 'AC');
+      final wa = await judge(lang: 'py', source: 'a, b = map(int, input().split())\nprint(min(a + b, 2**31 - 1))\n', tests: tests, backend: be);
+      expect([wa.verdict, wa.test], ['WA', 2]);
+      final tle = await judge(lang: 'py', source: 'while True:\n    pass\n', tests: tests, timeLimit: 300, backend: be);
+      expect(tle.verdict, 'TLE');
+      final re = await judge(lang: 'py', source: 'x = [1]\nprint(x[5])\n', tests: tests, backend: be);
+      expect(re.verdict, 'RE');
+      final ce = await judge(lang: 'py', source: 'def f(:\n    pass\n', tests: tests, backend: be);
+      expect(ce.verdict, 'CE');
+      expect(ce.message, contains('main.py'));
+      expect((await runAll(sum, ['2 2', '3 4'], be, lang: 'py')).map((s) => s.trim()), ['4', '7']);
+      // In tiếng Việt không bị lỗi mã hoá.
+      expect((await runAll('print("Xin chào " + input())', ['bạn'], be, lang: 'py')).single.trim(), 'Xin chào bạn');
+    }, skip: testPython == null);
   });
 
   group('IDE', () {

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:re_editor/re_editor.dart';
 import 'package:re_highlight/languages/cpp.dart';
 import 'package:re_highlight/languages/javascript.dart';
+import 'package:re_highlight/languages/python.dart';
 import 'package:re_highlight/styles/atom-one-dark.dart';
 import 'package:re_highlight/styles/atom-one-light.dart';
 
@@ -97,7 +98,7 @@ class CodeArea extends StatelessWidget {
         fontFamily: monoFont,
         backgroundColor: dark ? const Color(0xFF1E1F22) : Colors.white,
         codeTheme: CodeHighlightTheme(
-          languages: {lang: CodeHighlightThemeMode(mode: lang == 'cpp' ? langCpp : langJavascript)},
+          languages: {lang: CodeHighlightThemeMode(mode: switch (lang) { 'py' => langPython, 'js' => langJavascript, _ => langCpp })},
           theme: dark ? atomOneDarkTheme : atomOneLightTheme,
         ),
       ),

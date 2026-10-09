@@ -18,6 +18,23 @@ int main() {
 }
 ''';
 
+const pyTemplate = '''import sys
+input = sys.stdin.readline
+
+
+def main():
+    n = int(input())
+    a = list(map(int, input().split()))
+    print(sum(a))
+
+
+main()
+''';
+
+const pyIdeNewCode = '''n = int(input("Nhap n: "))
+print("n * n =", n * n)
+''';
+
 const ideNewCode = '''#include <bits/stdc++.h>
 using namespace std;
 
