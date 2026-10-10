@@ -19,7 +19,7 @@ const releaseTag = 'ban-moi-nhat';
 
 /// Commit của bản đang chạy (CI truyền vào bằng --dart-define=GIT_SHA=...). Rỗng khi chạy từ mã nguồn.
 const buildSha = String.fromEnvironment('GIT_SHA');
-const buildVersion = String.fromEnvironment('APP_VERSION', defaultValue: '3.2.2');
+const buildVersion = String.fromEnvironment('APP_VERSION', defaultValue: '3.2.3');
 
 const defaultContentUrl = 'https://github.com/$githubRepo/releases/download/$releaseTag/noi-dung.json';
 

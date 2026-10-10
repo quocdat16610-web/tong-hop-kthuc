@@ -120,7 +120,7 @@ class _BoardTabState extends State<BoardTab> {
       Expanded(
         child: Padding(
           padding: const EdgeInsets.all(10),
-          child: Whiteboard(key: ObjectKey(cur), block: cur, ro: false, fit: true, onChanged: _save),
+          child: Whiteboard(key: ObjectKey(cur), block: cur, ro: false, fill: true, onChanged: _save),
         ),
       ),
     ]);
