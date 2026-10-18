@@ -8,6 +8,7 @@ import '../app_state.dart';
 import '../core/storage.dart';
 import '../core/vcs.dart';
 import 'theme.dart';
+import 'update_ui.dart' show beforeExit;
 import 'whiteboard.dart';
 import 'widgets.dart';
 
@@ -28,18 +29,27 @@ class _BoardTabState extends State<BoardTab> {
   void initState() {
     super.initState();
     if (items.isEmpty) _add(save: false);
+    beforeExit.add(_flush);
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
-    Storage.I.writeKv('boards', data);
+    beforeExit.remove(_flush);
+    _flush();
     super.dispose();
+  }
+
+  /// Ghi ngay nếu còn thay đổi chờ lưu (cũng gọi khi đóng app, vì lúc đó dispose không chạy).
+  void _flush() {
+    if (_timer == null) return;
+    _timer!.cancel();
+    _timer = null;
+    Storage.I.writeKv('boards', data);
   }
 
   void _save() {
     _timer?.cancel();
-    _timer = Timer(const Duration(milliseconds: 500), () => Storage.I.writeKv('boards', data));
+    _timer = Timer(const Duration(milliseconds: 500), _flush);
   }
 
   void _add({bool save = true}) {

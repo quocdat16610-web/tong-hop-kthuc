@@ -70,15 +70,16 @@ class Storage {
   }
 
   // ---------- Ảnh / video (tham chiếu "asset:<hash>") ----------
-  Json get _assetIndex => _readJson(_f('assets/index.json'), {});
+  Json? _assetIdx;
+  Json get _assetIndex => _assetIdx ??= _readJson(_f('assets/index.json'), {}); // đọc file một lần, giữ trong bộ nhớ
+  void _saveAssetIndex() => _writeJson(_f('assets/index.json'), _assetIndex);
 
   String addAsset(Uint8List bytes, {String type = 'application/octet-stream', String name = ''}) {
     final hash = crypto.sha256.convert(bytes).toString();
     final f = _f('assets/$hash');
     if (!f.existsSync()) f.writeAsBytesSync(bytes);
-    final idx = _assetIndex;
-    idx[hash] = {'type': type, 'name': name, 'size': bytes.length};
-    _writeJson(_f('assets/index.json'), idx);
+    _assetIndex[hash] = {'type': type, 'name': name, 'size': bytes.length};
+    _saveAssetIndex();
     return 'asset:$hash';
   }
 
@@ -108,14 +109,15 @@ class Storage {
 
   void unpackAssets(Map? map) {
     if (map == null) return;
+    var changed = false;
     map.forEach((hash, a) {
       if (hash is! String || !RegExp(r'^[0-9a-f]{16,64}$').hasMatch(hash) || a is! Map) return;
       final f = _f('assets/$hash');
       if (!f.existsSync()) f.writeAsBytesSync(base64Decode(a['data'] as String));
-      final idx = _assetIndex;
-      idx[hash] = {'type': a['type'] ?? '', 'name': a['name'] ?? ''};
-      _writeJson(_f('assets/index.json'), idx);
+      _assetIndex[hash] = {'type': a['type'] ?? '', 'name': a['name'] ?? ''};
+      changed = true;
     });
+    if (changed) _saveAssetIndex(); // ghi chỉ mục một lần thay vì một lần mỗi file
   }
 
   // ---------- Bài nộp & lượt thi ----------

@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../app_state.dart';
+import '../core/runner.dart' show LocalBackend;
 import '../core/storage.dart';
 import '../core/updater.dart';
 import '../core/vcs.dart';
@@ -17,6 +18,9 @@ import 'widgets.dart';
 
 final messengerKey = GlobalKey<ScaffoldMessengerState>();
 final navKey = GlobalKey<NavigatorState>();
+
+/// Việc cần làm ngay trước khi thoát app (ghi nốt dữ liệu đang chờ lưu).
+final Set<void Function()> beforeExit = {};
 
 void _notify(String msg, {SnackBarAction? action}) {
   messengerKey.currentState?.showSnackBar(SnackBar(content: Text(msg), action: action, duration: const Duration(seconds: 6)));
@@ -71,6 +75,13 @@ class UpdateService extends ChangeNotifier with WidgetsBindingObserver, WindowLi
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Điện thoại: app bị đưa xuống nền có thể bị hệ điều hành tắt bất cứ lúc nào → ghi ngay phần đang chờ lưu.
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+      app.saveNow();
+      for (final f in List.of(beforeExit)) {
+        f();
+      }
+    }
     if (state == AppLifecycleState.resumed && DateTime.now().difference(_lastCheck) > const Duration(minutes: 3)) _checkAll();
   }
 
@@ -79,16 +90,24 @@ class UpdateService extends ChangeNotifier with WidgetsBindingObserver, WindowLi
     if (DateTime.now().difference(_lastCheck) > const Duration(minutes: 3)) _checkAll();
   }
 
-  /// Đóng cửa sổ: lưu dữ liệu; nếu đã tải sẵn bản mới thì cài luôn (lần mở sau là bản mới).
+  /// Đóng cửa sổ: ẩn ngay cho người dùng thấy app đã tắt, lưu dữ liệu, cài bản mới nếu đã tải sẵn, rồi thoát hẳn.
+  /// Thoát bằng exit() thay vì chờ engine tự huỷ (huỷ trình phát video, QuickJS, tiến trình con… có thể mất vài giây).
   @override
   void onWindowClose() async {
     try {
+      await windowManager.hide();
+    } catch (_) {}
+    try {
       app.saveNow();
+      for (final f in List.of(beforeExit)) {
+        f();
+      }
+      LocalBackend.killAll();
       if (ready != null && ready!.existsSync()) await installReady(relaunch: false); // thoát luôn nếu thành công
     } catch (_) {
       // dù lỗi gì cũng phải đóng được cửa sổ
     }
-    await windowManager.destroy();
+    exit(0);
   }
 
   @override

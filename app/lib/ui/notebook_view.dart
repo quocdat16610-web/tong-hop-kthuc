@@ -8,6 +8,7 @@ import '../core/templates.dart';
 import '../core/vcs.dart';
 import 'blocks.dart';
 import 'contest.dart';
+import 'file_block.dart';
 import 'media.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -202,8 +203,10 @@ class _NotebookViewState extends State<NotebookView> {
   Future<void> _add(AppState app, Json page, int index, String kind) async {
     final b = newBlock(kind);
     (page['blocks'] as List).insert(index, b);
-    if (kind != 'heading' && kind != 'code') app.editing.add(b['id'] as String);
+    if (kind != 'heading' && kind != 'code' && kind != 'file') app.editing.add(b['id'] as String);
     app.changed();
+    if (kind == 'file' && await addFilesTo(context, b) > 0) app.changed();
+    if (!mounted) return;
     if (kind == 'image') {
       final ref = await pickAsset(context, FileType.image);
       if (ref != null) {

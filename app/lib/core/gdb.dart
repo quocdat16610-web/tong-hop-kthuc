@@ -197,7 +197,7 @@ class DebugSession {
     final env = Map<String, String>.from(Platform.environment);
     final key = env.keys.firstWhere((k) => k.toUpperCase() == 'PATH', orElse: () => 'PATH');
     env[key] = '${prog.gppDir}${isWin ? ';' : ':'}${env[key] ?? ''}';
-    final proc = await Process.start(gdb, ['--interpreter=mi2', '--quiet', '--nx', prog.exe], workingDirectory: prog.dir, environment: env);
+    final proc = LocalBackend.track(await Process.start(gdb, ['--interpreter=mi2', '--quiet', '--nx', prog.exe], workingDirectory: prog.dir, environment: env));
     _proc = proc;
     proc.stdout.transform(utf8.decoder).transform(const LineSplitter()).listen(_onLine);
     proc.stderr.drain<void>();

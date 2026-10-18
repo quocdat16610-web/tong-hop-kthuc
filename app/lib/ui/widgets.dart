@@ -1,11 +1,14 @@
 // Hộp thoại và tiện ích giao diện dùng chung.
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+
+import '../core/storage.dart';
 
 import 'theme.dart';
 
@@ -157,3 +160,45 @@ class MonoBox extends StatelessWidget {
         ),
       );
 }
+
+const _mimes = {
+  'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'gif': 'image/gif', 'webp': 'image/webp', 'bmp': 'image/bmp', 'svg': 'image/svg+xml',
+  'mp4': 'video/mp4', 'webm': 'video/webm', 'mkv': 'video/x-matroska', 'mov': 'video/quicktime', 'mp3': 'audio/mpeg', 'wav': 'audio/wav',
+  'pdf': 'application/pdf', 'txt': 'text/plain', 'md': 'text/markdown', 'csv': 'text/csv', 'json': 'application/json', 'zip': 'application/zip',
+  'cpp': 'text/x-c++src', 'h': 'text/x-c', 'py': 'text/x-python',
+  'doc': 'application/msword', 'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'xls': 'application/vnd.ms-excel', 'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'ppt': 'application/vnd.ms-powerpoint', 'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+};
+
+String mimeOf(String name) {
+  final i = name.lastIndexOf('.');
+  return _mimes[i < 0 ? '' : name.substring(i + 1).toLowerCase()] ?? 'application/octet-stream';
+}
+
+String formatSize(int bytes) => bytes < 1024
+    ? '$bytes B'
+    : bytes < 1048576
+    ? '${(bytes / 1024).toStringAsFixed(1)} KB'
+    : '${(bytes / 1048576).toStringAsFixed(1)} MB';
+
+/// Chọn file trên máy và lưu vào kho ảnh / file của app. Trả về danh sách (tham chiếu "asset:…", tên, kích thước).
+Future<List<({String ref, String name, int size, String type})>> pickAssets(BuildContext context, FileType type, {bool multiple = false}) async {
+  final r = await FilePicker.platform.pickFiles(type: type, withData: true, allowMultiple: multiple);
+  if (r == null || r.files.isEmpty) return const [];
+  final out = <({String ref, String name, int size, String type})>[];
+  for (final f in r.files) {
+    Uint8List? bytes = f.bytes;
+    if (bytes == null && f.path != null) bytes = await File(f.path!).readAsBytes();
+    if (bytes == null) continue;
+    if (bytes.length > 200 * 1024 * 1024 && context.mounted) {
+      if (!await confirmBox(context, 'File lớn', 'File "${f.name}" ${(bytes.length / 1048576).round()} MB sẽ làm file chia sẻ rất nặng. Vẫn thêm?', ok: 'Thêm')) continue;
+    }
+    var mime = mimeOf(f.name);
+    if (type == FileType.video && !mime.startsWith('video/')) mime = 'video/${(f.extension ?? '').toLowerCase()}';
+    out.add((ref: Storage.I.addAsset(bytes, type: mime, name: f.name), name: f.name, size: bytes.length, type: mime));
+  }
+  return out;
+}
+
+Future<String?> pickAsset(BuildContext context, FileType type) async => (await pickAssets(context, type)).firstOrNull?.ref;

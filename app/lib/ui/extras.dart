@@ -70,6 +70,7 @@ const _kindName = {
   'sim': 'Mô phỏng',
   'board': 'Bảng trắng',
   'image': 'Ảnh',
+  'file': 'File',
 };
 
 const _accents = 'àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ';
@@ -93,7 +94,7 @@ List<_Hit> _search(List<Repo> repos, String q) {
     for (final p in pagesOf(r.working)) {
       if (fold('${p['title']} ${p['chapter'] ?? ''}').contains(query)) out.add(_Hit(r, p, null, 'page', '${p['title']}'));
       for (final b in blocksOf(p)) {
-        final fields = [b['text'], b['title'], b['caption'], b['statement'], b['code'], b['url'], b['timestamps']].whereType<String>().join('\n');
+        final fields = [b['text'], b['title'], b['caption'], b['statement'], b['code'], b['url'], b['timestamps'], for (final f in (b['files'] as List?) ?? const []) if (f is Map) f['name']].whereType<String>().join('\n');
         final i = fold(fields).indexOf(query);
         if (i < 0) continue;
         final start = (i - 40).clamp(0, fields.length);

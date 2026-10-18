@@ -212,11 +212,25 @@ class LocalBackend implements Backend {
     return (i >= 0 ? lines.sublist(i) : lines).join('\n').trim();
   }
 
-  Future<Process> spawn(String id) {
+  Future<Process> spawn(String id) async {
     final prog = programs[id];
     if (prog == null) throw StateError('Chương trình chưa được biên dịch');
-    if (prog.python) return Process.start(prog.exe, prog.args, workingDirectory: prog.dir, environment: _pyEnv());
-    return Process.start(prog.exe, prog.args, workingDirectory: prog.dir, environment: _env(prog.gppDir));
+    return track(await Process.start(prog.exe, prog.args, workingDirectory: prog.dir, environment: prog.python ? _pyEnv() : _env(prog.gppDir)));
+  }
+
+  /// Tiến trình con đang chạy (chương trình của người dùng, gdb) — dừng hết khi thoát app.
+  static final Set<Process> _running = {};
+  static Process track(Process proc) {
+    _running.add(proc);
+    proc.exitCode.whenComplete(() => _running.remove(proc));
+    return proc;
+  }
+
+  static void killAll() {
+    for (final proc in List.of(_running)) {
+      proc.kill(ProcessSignal.sigkill);
+    }
+    _running.clear();
   }
 
   @override
@@ -277,10 +291,20 @@ class LocalBackend implements Backend {
     });
   }
 
+  /// Dọn thư mục build cũ lúc mở app: chuyển vào thùng rác tạm rồi xoá ngầm để không làm chậm lúc khởi động.
   static void cleanupAll() {
+    final trash = Directory('${work.path}-rac');
     try {
-      if (work.existsSync()) work.deleteSync(recursive: true);
-    } catch (_) {}
+      if (work.existsSync()) {
+        trash.createSync(recursive: true);
+        work.renameSync(p.join(trash.path, '${DateTime.now().microsecondsSinceEpoch}'));
+      }
+    } catch (_) {
+      try {
+        work.deleteSync(recursive: true);
+      } catch (_) {}
+    }
+    if (trash.existsSync()) trash.delete(recursive: true).ignore();
   }
 }
 

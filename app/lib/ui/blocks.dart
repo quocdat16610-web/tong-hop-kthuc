@@ -15,6 +15,7 @@ import '../core/templates.dart';
 import '../core/vcs.dart';
 import 'code_editor.dart';
 import 'extras.dart' show pickSnippet;
+import 'file_block.dart';
 import 'media.dart';
 import 'problem.dart';
 import 'scratch_editor.dart';
@@ -32,6 +33,7 @@ const blockTypes = [
   ('code_py', 'Code Python', Icons.data_object),
   ('sim', 'Mô phỏng', Icons.animation),
   ('board', 'Bảng trắng', Icons.draw_outlined),
+  ('file', 'File đính kèm', Icons.attach_file),
   ('problem', 'Bài tập', Icons.assignment_outlined),
 ];
 
@@ -43,27 +45,13 @@ Json newBlock(String kind) {
     'image' => {'id': id, 'type': 'image', 'src': '', 'caption': '', 'width': 'full'},
     'video' => {'id': id, 'type': 'video', 'title': '', 'url': '', 'timestamps': ''},
     'board' => {'id': id, 'type': 'board', 'title': '', 'height': 560, 'bg': 'grid', 'strokes': <dynamic>[]},
+    'file' => {'id': id, 'type': 'file', 'title': '', 'files': <dynamic>[]},
     'code_py' => {'id': id, 'type': 'code', 'lang': 'py', 'title': 'main.py', 'code': pyTemplate, 'stdin': '3\n1 2 3\n'},
     'code' => {'id': id, 'type': 'code', 'title': '', 'code': cppTemplate, 'stdin': ''},
     'sim' => {'id': id, 'type': 'sim', 'mode': 'blocks', 'title': blockTemplates.first.name, 'scratch': blockTemplates.first.program(), 'code': generateJs(blockTemplates.first.program()), 'input': blockTemplates.first.input},
     _ => {'id': id, 'type': 'problem', ...newProblem()},
   };
   return deepClone(b) as Json;
-}
-
-Future<String?> pickAsset(BuildContext context, FileType type) async {
-  final r = await FilePicker.platform.pickFiles(type: type, withData: true);
-  if (r == null || r.files.isEmpty) return null;
-  final f = r.files.first;
-  Uint8List? bytes = f.bytes;
-  if (bytes == null && f.path != null) bytes = await File(f.path!).readAsBytes();
-  if (bytes == null) return null;
-  if (bytes.length > 200 * 1024 * 1024 && context.mounted) {
-    if (!await confirmBox(context, 'File lớn', 'File ${(bytes.length / 1048576).round()} MB sẽ làm file chia sẻ rất nặng. Vẫn thêm?', ok: 'Thêm')) return null;
-  }
-  final ext = (f.extension ?? '').toLowerCase();
-  final mime = type == FileType.image ? 'image/${ext == 'jpg' ? 'jpeg' : ext}' : 'video/$ext';
-  return Storage.I.addAsset(bytes, type: mime, name: f.name);
 }
 
 /// Khung bao một khối: nút tuỳ chọn (sửa, di chuyển, xoá) + nội dung.
@@ -78,7 +66,7 @@ class BlockFrame extends StatelessWidget {
     final ro = app.readOnly;
     final type = block['type'] as String;
     final editing = !ro && app.editing.contains(block['id']);
-    final framed = const ['video', 'code', 'sim', 'problem', 'board'].contains(type);
+    final framed = const ['video', 'code', 'sim', 'problem', 'board', 'file'].contains(type);
     final blocks = page['blocks'] as List;
 
     void move(int d) {
@@ -121,7 +109,7 @@ class BlockFrame extends StatelessWidget {
                   blocks.insert(blocks.indexOf(block) + 1, {...deepClone(block) as Json, 'id': newId(12)});
                   app.changed();
                 case 'del':
-                  final empty = '${block['text'] ?? ''}${block['url'] ?? ''}${block['title'] ?? ''}${block['src'] ?? ''}'.isEmpty;
+                  final empty = '${block['text'] ?? ''}${block['url'] ?? ''}${block['title'] ?? ''}${block['src'] ?? ''}'.isEmpty && ((block['files'] ?? const []) as List).isEmpty;
                   if (!empty && !await confirmBox(context, 'Xoá khối?', 'Xoá ${blockName(block)}?', ok: 'Xoá', danger: true)) return;
                   blocks.remove(block);
                   app.editing.remove(block['id']);
@@ -129,7 +117,7 @@ class BlockFrame extends StatelessWidget {
               }
             },
             itemBuilder: (_) => [
-              if (type != 'heading' && type != 'code' && type != 'board') PopupMenuItem(value: 'edit', child: Text(editing ? 'Xong' : 'Sửa')),
+              if (type != 'heading' && type != 'code' && type != 'board' && type != 'file') PopupMenuItem(value: 'edit', child: Text(editing ? 'Xong' : 'Sửa')),
               if (type == 'board') const PopupMenuItem(value: 'rename', child: Text('Đặt tên bảng')),
               if (type == 'heading') ...[
                 const PopupMenuItem(value: 'h1', child: Text('Tiêu đề lớn (H1)')),
@@ -151,6 +139,7 @@ class BlockFrame extends StatelessWidget {
       'video' => VideoBlock(key: ValueKey('v${block['id']}'), block: block, editing: editing),
       'code' => CodeBlock(key: ValueKey('c${block['id']}'), block: block, ro: ro),
       'board' => WhiteboardBlock(key: ValueKey('w${block['id']}'), block: block, ro: ro),
+      'file' => FileBlock(key: ValueKey('f${block['id']}'), block: block, ro: ro),
       'sim' => SimBlock(key: ValueKey('s${block['id']}'), block: block, editing: editing),
       'problem' => editing ? ProblemEditor(key: ValueKey('pe${block['id']}'), block: block) : ProblemView(key: ValueKey('pv${block['id']}'), block: block),
       _ => Text('Loại khối chưa hỗ trợ: $type'),

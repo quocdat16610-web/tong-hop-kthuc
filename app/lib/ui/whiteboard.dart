@@ -1,16 +1,20 @@
-// Bảng trắng vô hạn: vẽ tay, đường thẳng, mũi tên, hình chữ nhật, hình tròn, chữ, tẩy, hoàn tác.
+// Bảng trắng vô hạn: vẽ tay, đường thẳng, mũi tên, hình chữ nhật, hình tròn, chữ, ảnh, tẩy, hoàn tác.
 // Kéo bằng công cụ bàn tay / chuột phải / chuột giữa / hai ngón để di chuyển, cuộn hoặc chụm ngón để phóng to.
+// Bút có "tự nắn hình": vẽ tay đường thẳng / hình tròn / chữ nhật / tam giác méo sẽ được thay bằng hình chuẩn ngay khi nhấc bút.
 // Nét vẽ lưu dạng vector trong notebook (nên có lịch sử, commit, merge, chia sẻ như nội dung khác).
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/services.dart' show HardwareKeyboard;
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../app_state.dart';
+import '../core/shapes.dart';
+import '../core/storage.dart';
 import '../core/vcs.dart' show Json;
 import 'theme.dart';
 import 'widgets.dart';
@@ -20,11 +24,12 @@ const minZoom = 0.05, maxZoom = 8.0;
 
 const boardColors = [Color(0xFF1F2328), Color(0xFFCF222E), Color(0xFF0969DA), Color(0xFF1A7F37), Color(0xFFBF8700), Color(0xFF8250DF), Color(0xFFE16F24), Color(0xFF6E7781)];
 
-enum Tool { hand, pen, highlighter, line, arrow, rect, ellipse, text, eraser }
+enum Tool { hand, select, pen, highlighter, line, arrow, rect, ellipse, text, eraser }
 
 const _toolInfo = {
   Tool.hand: (Icons.pan_tool_outlined, 'Di chuyển bảng (hoặc kéo bằng chuột phải / chuột giữa / hai ngón)'),
-  Tool.pen: (Icons.edit, 'Bút'),
+  Tool.select: (Icons.near_me_outlined, 'Chọn: kéo để di chuyển, kéo góc để đổi cỡ, Delete để xoá'),
+  Tool.pen: (Icons.edit, 'Bút (tự nắn đường thẳng / hình tròn / chữ nhật / tam giác nếu bật)'),
   Tool.highlighter: (Icons.brush, 'Bút dạ (tô mờ)'),
   Tool.line: (Icons.horizontal_rule, 'Đường thẳng'),
   Tool.arrow: (Icons.north_east, 'Mũi tên'),
@@ -37,101 +42,205 @@ const _toolInfo = {
 List _strokes(Json b) => (b['strokes'] ??= <dynamic>[]) as List;
 double _height(Json b) => ((b['height'] ?? 560) as num).toDouble();
 
+/// Ảnh trên bảng: giải mã một lần (thu nhỏ còn tối đa 2048 px), dùng chung cho mọi bảng.
+class BoardImages {
+  static final _cache = <String, ui.Image>{};
+  static final _futures = <String, Future<ui.Image?>>{};
+
+  /// Tăng mỗi khi có ảnh giải mã xong để bảng vẽ lại.
+  static final tick = ValueNotifier(0);
+
+  static ui.Image? get(String src) {
+    final img = _cache[src];
+    if (img == null) load(src);
+    return img;
+  }
+
+  static Future<ui.Image?> load(String src) => _futures[src] ??= _decode(src).then((img) {
+    if (img != null) {
+      _cache[src] = img;
+      tick.value++;
+    }
+    return img;
+  });
+
+  static Future<ui.Image?> _decode(String src) async {
+    try {
+      final f = Storage.I.assetFile(src);
+      if (f == null) return null;
+      final desc = await ui.ImageDescriptor.encoded(await ui.ImmutableBuffer.fromUint8List(await f.readAsBytes()));
+      const maxSide = 2048;
+      final wide = desc.width >= desc.height;
+      final big = math.max(desc.width, desc.height) > maxSide;
+      final codec = await desc.instantiateCodec(targetWidth: big && wide ? maxSide : null, targetHeight: big && !wide ? maxSide : null);
+      return (await codec.getNextFrame()).image;
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+/// Dữ liệu hình học tính sẵn cho một nét đã vẽ xong (nét không bị sửa tại chỗ — di chuyển thì thay bằng map mới).
+class _Geo {
+  final List<Offset> pts;
+  final Rect bounds;
+  Path? path;
+  _Geo(this.pts, this.bounds);
+}
+
+final _geoCache = Expando<_Geo>();
+
+// Số lần đổi của mỗi danh sách nét (dùng chung giữa khối trong trang và bản toàn màn hình của cùng một bảng).
+final _listRev = Expando<int>();
+int _revOf(List l) => _listRev[l] ?? 0;
+void _bump(List l) => _listRev[l] = _revOf(l) + 1;
+
+List<Offset> _pts(Map s) {
+  final p = (s['p'] as List).cast<num>();
+  return [for (var i = 0; i + 1 < p.length; i += 2) Offset(p[i].toDouble(), p[i + 1].toDouble())];
+}
+
+double _w(Map s) => ((s['w'] ?? 3) as num).toDouble();
+
+_Geo _makeGeo(Map s) {
+  final p = _pts(s);
+  if (p.isEmpty) return _Geo(p, Rect.zero);
+  final w = _w(s);
+  if (s['t'] == 'text') {
+    final lines = '${s['text'] ?? ''}'.split('\n');
+    final fs = 10 + w * 4;
+    return _Geo(p, Rect.fromLTWH(p.first.dx, p.first.dy, lines.map((l) => l.length).fold(1, math.max) * fs * .62, lines.length * fs * 1.3));
+  }
+  var l = p.first.dx, t = p.first.dy, r = l, btm = t;
+  for (final q in p) {
+    l = math.min(l, q.dx);
+    r = math.max(r, q.dx);
+    t = math.min(t, q.dy);
+    btm = math.max(btm, q.dy);
+  }
+  final rect = Rect.fromLTRB(l, t, r, btm);
+  if (s['t'] == 'image') return _Geo(p, rect);
+  return _Geo(p, rect.inflate(w * (s['t'] == 'highlighter' ? 4 : 1) / 2 + (s['t'] == 'arrow' ? 10 + w * 3 : 0)));
+}
+
+_Geo _geo(Map s) => _geoCache[s] ??= _makeGeo(s);
+
+Rect? _allBounds(List strokes) {
+  Rect? r;
+  for (final s in strokes) {
+    if (s is! Map) continue;
+    final b = _geo(s).bounds;
+    r = r == null ? b : r.expandToInclude(b);
+  }
+  return r;
+}
+
+double _distToSegment(Offset p, Offset a, Offset b) {
+  final ab = b - a;
+  final len2 = ab.dx * ab.dx + ab.dy * ab.dy;
+  if (len2 == 0) return (p - a).distance;
+  final t = (((p - a).dx * ab.dx + (p - a).dy * ab.dy) / len2).clamp(0.0, 1.0);
+  return (p - (a + ab * t)).distance;
+}
+
+/// Điểm p có chạm nét s không (sai số tol, đơn vị bảng). `solid`: chạm bên trong hình / ảnh / chữ cũng tính.
+bool _hits(Map s, Offset p, double tol, {bool solid = true}) {
+  final g = _geo(s);
+  if (g.pts.isEmpty || !g.bounds.inflate(tol).contains(p)) return false;
+  final t = s['t'];
+  final r = tol + _w(s) / 2;
+  if (t == 'image' || t == 'text') return true;
+  if (t == 'rect' || t == 'ellipse') {
+    if (solid) return true;
+    final box = Rect.fromPoints(g.pts[0], g.pts[1]);
+    return !box.deflate(r).contains(p);
+  }
+  final pts = g.pts;
+  if (pts.length == 1) return (pts.first - p).distance < r;
+  for (var i = 1; i < pts.length; i++) {
+    if (_distToSegment(p, pts[i - 1], pts[i]) < r) return true;
+  }
+  return t == 'poly' && _distToSegment(p, pts.last, pts.first) < r;
+}
+
+void _drawStroke(Canvas c, Map s, _Geo g) {
+  final t = s['t'] as String;
+  final color = Color((s['c'] ?? 0xFF1F2328) as int);
+  final w = _w(s);
+  final p = g.pts;
+  if (p.isEmpty) return;
+  final paint = Paint()
+    ..color = t == 'highlighter' ? color.withValues(alpha: .35) : color
+    ..strokeWidth = t == 'highlighter' ? w * 4 : w
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round
+    ..strokeJoin = StrokeJoin.round;
+  switch (t) {
+    case 'pen' || 'highlighter':
+      if (p.length == 1) {
+        c.drawCircle(p.first, paint.strokeWidth / 2, Paint()..color = paint.color);
+        return;
+      }
+      c.drawPath(
+        g.path ??= () {
+          final path = Path()..moveTo(p.first.dx, p.first.dy);
+          for (var i = 1; i < p.length - 1; i++) {
+            final mid = (p[i] + p[i + 1]) / 2;
+            path.quadraticBezierTo(p[i].dx, p[i].dy, mid.dx, mid.dy);
+          }
+          return path..lineTo(p.last.dx, p.last.dy);
+        }(),
+        paint,
+      );
+    case 'poly':
+      c.drawPath(g.path ??= (Path()..addPolygon(p, true)), paint);
+    case 'line' || 'arrow':
+      if (p.length < 2) return;
+      c.drawLine(p[0], p[1], paint);
+      if (t == 'arrow') {
+        final d = p[1] - p[0];
+        if (d.distance < 1) return;
+        final ang = math.atan2(d.dy, d.dx);
+        final len = 10 + w * 3;
+        for (final a in [ang + 2.6, ang - 2.6]) {
+          c.drawLine(p[1], p[1] + Offset(math.cos(a), math.sin(a)) * len, paint);
+        }
+      }
+    case 'rect':
+      if (p.length < 2) return;
+      c.drawRect(Rect.fromPoints(p[0], p[1]), paint);
+    case 'ellipse':
+      if (p.length < 2) return;
+      c.drawOval(Rect.fromPoints(p[0], p[1]), paint);
+    case 'image':
+      if (p.length < 2) return;
+      final dst = Rect.fromPoints(p[0], p[1]);
+      final img = BoardImages.get('${s['src'] ?? ''}');
+      if (img == null) {
+        c.drawRect(dst, Paint()..color = const Color(0x14000000));
+        return;
+      }
+      c.drawImageRect(img, Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble()), dst, Paint()..filterQuality = FilterQuality.medium);
+    case 'text':
+      final tp = TextPainter(
+        text: TextSpan(
+          text: '${s['text'] ?? ''}',
+          style: TextStyle(color: color, fontSize: 10 + w * 4, fontWeight: FontWeight.w500),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(c, p.first);
+  }
+}
+
+/// Lớp dưới: nền + các nét đã vẽ xong. Chỉ vẽ lại khi nét / khung nhìn đổi (không vẽ lại theo từng điểm của nét đang vẽ).
 class _BoardPainter extends CustomPainter {
   final List strokes;
-  final Map? live;
   final String bg;
   final double zoom;
   final Offset origin; // toạ độ trên bảng ở góc trên-trái khung nhìn
-  _BoardPainter(this.strokes, this.live, this.bg, this.zoom, this.origin);
-
-  static List<Offset> pts(Map s) {
-    final p = (s['p'] as List).cast<num>();
-    return [for (var i = 0; i + 1 < p.length; i += 2) Offset(p[i].toDouble(), p[i + 1].toDouble())];
-  }
-
-  /// Khung bao gần đúng của một nét (để bỏ qua nét ngoài khung nhìn và tính "vừa khung").
-  static Rect strokeBounds(Map s) {
-    final p = pts(s);
-    if (p.isEmpty) return Rect.zero;
-    if (s['t'] == 'text') {
-      final w = ((s['w'] ?? 3) as num).toDouble();
-      final lines = '${s['text'] ?? ''}'.split('\n');
-      final fs = 10 + w * 4;
-      return Rect.fromLTWH(p.first.dx, p.first.dy, lines.map((l) => l.length).fold(1, math.max) * fs * .62, lines.length * fs * 1.3);
-    }
-    var r = Rect.fromPoints(p.first, p.first);
-    for (final q in p) {
-      r = r.expandToInclude(Rect.fromPoints(q, q));
-    }
-    final w = ((s['w'] ?? 3) as num).toDouble() * (s['t'] == 'highlighter' ? 4 : 1);
-    return r.inflate(w / 2 + (s['t'] == 'arrow' ? 10 + w * 3 : 0));
-  }
-
-  static Rect? allBounds(List strokes) {
-    Rect? r;
-    for (final s in strokes) {
-      if (s is! Map) continue;
-      final b = strokeBounds(s);
-      r = r == null ? b : r.expandToInclude(b);
-    }
-    return r;
-  }
-
-  void _draw(Canvas c, Map s) {
-    final t = s['t'] as String;
-    final color = Color((s['c'] ?? 0xFF1F2328) as int);
-    final w = ((s['w'] ?? 3) as num).toDouble();
-    final paint = Paint()
-      ..color = t == 'highlighter' ? color.withValues(alpha: .35) : color
-      ..strokeWidth = t == 'highlighter' ? w * 4 : w
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    final p = pts(s);
-    if (p.isEmpty) return;
-    switch (t) {
-      case 'pen' || 'highlighter':
-        if (p.length == 1) {
-          c.drawCircle(p.first, paint.strokeWidth / 2, Paint()..color = paint.color);
-          return;
-        }
-        final path = Path()..moveTo(p.first.dx, p.first.dy);
-        for (var i = 1; i < p.length - 1; i++) {
-          final mid = (p[i] + p[i + 1]) / 2;
-          path.quadraticBezierTo(p[i].dx, p[i].dy, mid.dx, mid.dy);
-        }
-        path.lineTo(p.last.dx, p.last.dy);
-        c.drawPath(path, paint);
-      case 'line' || 'arrow':
-        if (p.length < 2) return;
-        c.drawLine(p[0], p[1], paint);
-        if (t == 'arrow') {
-          final d = p[1] - p[0];
-          if (d.distance < 1) return;
-          final ang = math.atan2(d.dy, d.dx);
-          final len = 10 + w * 3;
-          for (final a in [ang + 2.6, ang - 2.6]) {
-            c.drawLine(p[1], p[1] + Offset(math.cos(a), math.sin(a)) * len, paint);
-          }
-        }
-      case 'rect':
-        if (p.length < 2) return;
-        c.drawRect(Rect.fromPoints(p[0], p[1]), paint);
-      case 'ellipse':
-        if (p.length < 2) return;
-        c.drawOval(Rect.fromPoints(p[0], p[1]), paint);
-      case 'text':
-        final tp = TextPainter(
-          text: TextSpan(
-            text: '${s['text'] ?? ''}',
-            style: TextStyle(color: color, fontSize: 10 + w * 4, fontWeight: FontWeight.w500),
-          ),
-          textDirection: TextDirection.ltr,
-        )..layout();
-        tp.paint(c, p.first);
-    }
-  }
+  final int rev;
+  _BoardPainter(this.strokes, this.bg, this.zoom, this.origin, this.rev) : super(repaint: BoardImages.tick);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -172,10 +281,48 @@ class _BoardPainter extends CustomPainter {
         );
       }
     }
+    final visible = view.inflate(20);
     for (final s in strokes) {
-      if (s is Map && view.overlaps(strokeBounds(s).inflate(20))) _draw(canvas, s);
+      if (s is! Map) continue;
+      final g = _geo(s);
+      if (visible.overlaps(g.bounds)) _drawStroke(canvas, s, g);
     }
-    if (live != null) _draw(canvas, live!);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _BoardPainter old) => old.rev != rev || old.zoom != zoom || old.origin != origin || old.bg != bg || !identical(old.strokes, strokes);
+}
+
+/// Lớp trên: nét đang vẽ dở + khung chọn.
+class _LivePainter extends CustomPainter {
+  final Map? live;
+  final Rect? sel;
+  final bool resizable;
+  final Color selColor;
+  final double zoom;
+  final Offset origin;
+  _LivePainter(this.live, this.sel, this.resizable, this.selColor, this.zoom, this.origin);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (live == null && sel == null) return;
+    canvas.save();
+    canvas.clipRect(Offset.zero & size);
+    canvas.scale(zoom);
+    canvas.translate(-origin.dx, -origin.dy);
+    if (live != null) _drawStroke(canvas, live!, _makeGeo(live!));
+    final r = sel;
+    if (r != null) {
+      final pen = Paint()
+        ..color = selColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5 / zoom;
+      canvas.drawRect(r.inflate(4 / zoom), pen);
+      if (resizable) {
+        canvas.drawRect(Rect.fromCenter(center: r.bottomRight, width: 12 / zoom, height: 12 / zoom), Paint()..color = selColor);
+      }
+    }
     canvas.restore();
   }
 
@@ -247,7 +394,15 @@ class _WhiteboardState extends State<Whiteboard> {
   Color color = boardColors.first;
   double width = 3;
   Map? live;
-  final List redo = [];
+
+  // Lịch sử: mỗi mục là bản sao nông danh sách nét (các nét không bị sửa tại chỗ nên dùng chung được).
+  final List<List> _undo = [], _redo = [];
+
+  // Chọn / kéo / đổi cỡ.
+  int? _sel;
+  ({Map orig, Offset start, bool resize, bool moved})? _drag;
+  bool _erasing = false;
+  final _focus = FocusNode(debugLabel: 'whiteboard');
 
   // Khung nhìn: zoom = số pixel trên màn hình cho 1 đơn vị bảng; origin = điểm trên bảng ở góc trên-trái.
   double? _zoom;
@@ -261,11 +416,78 @@ class _WhiteboardState extends State<Whiteboard> {
   double get zoom => _zoom ?? 1;
 
   Json get b => widget.block;
+  List get list => _strokes(b);
+
+  bool get _autoShape => context.read<AppState>().setting('boardShapes', true);
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    super.dispose();
+  }
 
   void _save() {
     if (!mounted) return;
     if (widget.onChanged != null) return widget.onChanged!();
     context.read<AppState>().edited();
+  }
+
+  /// Nét vẽ đã đổi: vẽ lại lớp nét + lưu.
+  void _commit() {
+    _bump(list);
+    setState(() {});
+    _save();
+  }
+
+  /// Ghi lại trạng thái hiện tại trước khi đổi (để hoàn tác).
+  void _checkpoint() {
+    _undo.add(List.of(list));
+    if (_undo.length > 200) _undo.removeAt(0);
+    _redo.clear();
+  }
+
+  void _undoAct() {
+    if (_undo.isEmpty && list.isEmpty) return;
+    _redo.add(List.of(list));
+    if (_undo.isNotEmpty) {
+      final prev = _undo.removeLast();
+      list
+        ..clear()
+        ..addAll(prev);
+    } else {
+      list.removeLast(); // mở lại bảng: chưa có lịch sử thì bỏ nét cuối như trước
+    }
+    _sel = null;
+    _commit();
+  }
+
+  void _redoAct() {
+    if (_redo.isEmpty) return;
+    _undo.add(List.of(list));
+    final next = _redo.removeLast();
+    list
+      ..clear()
+      ..addAll(next);
+    _sel = null;
+    _commit();
+  }
+
+  void _deleteSelected() {
+    final i = _sel;
+    if (i == null || i >= list.length) return;
+    _checkpoint();
+    list.removeAt(i);
+    _sel = null;
+    _commit();
+  }
+
+  void _sendToBack() {
+    final i = _sel;
+    if (i == null || i >= list.length || i == 0) return;
+    _checkpoint();
+    list.insert(0, list.removeAt(i));
+    _sel = 0;
+    _commit();
   }
 
   Offset _toBoard(Offset local) => origin + local / zoom;
@@ -281,7 +503,7 @@ class _WhiteboardState extends State<Whiteboard> {
       _userView = true;
     } else if (widget.fill) {
       _zoom = 1;
-      final r = _BoardPainter.allBounds(_strokes(b));
+      final r = _allBounds(list);
       if (r != null && !Rect.fromLTWH(0, 0, size.width, size.height).contains(r.bottomRight)) {
         WidgetsBinding.instance.addPostFrameCallback((_) => _fitAll());
       }
@@ -315,18 +537,21 @@ class _WhiteboardState extends State<Whiteboard> {
   /// Thu / phóng để thấy toàn bộ nét vẽ.
   void _fitAll() {
     if (!mounted || _size.isEmpty) return;
-    final r = _BoardPainter.allBounds(_strokes(b));
+    final r = _allBounds(list);
     if (r == null) return _setView(widget.fill ? 1 : _size.width / boardWidth, Offset.zero);
     final box = r.inflate(30);
     final z = math.min(_size.width / box.width, _size.height / box.height).clamp(minZoom, 2.0);
     _setView(z, box.center - Offset(_size.width, _size.height) / (2 * z));
   }
 
+  // ---------- Vẽ ----------
   void _start(Offset p) {
     if (tool == Tool.eraser) {
+      _erasing = false;
       _erase(p);
       return;
     }
+    if (tool == Tool.select) return _selectAt(p);
     if (tool == Tool.text) return;
     live = {
       't': tool.name,
@@ -340,87 +565,173 @@ class _WhiteboardState extends State<Whiteboard> {
 
   void _move(Offset p) {
     if (tool == Tool.eraser) return _erase(p);
+    if (_drag != null) return _dragTo(p);
     final s = live;
     if (s == null) return;
-    final list = s['p'] as List;
+    final pl = s['p'] as List;
     if (tool == Tool.pen || tool == Tool.highlighter) {
-      final last = Offset((list[list.length - 2] as num).toDouble(), (list[list.length - 1] as num).toDouble());
+      final last = Offset((pl[pl.length - 2] as num).toDouble(), (pl[pl.length - 1] as num).toDouble());
       if ((p - last).distance * zoom < 2) return;
-      list.addAll([_r(p.dx), _r(p.dy)]);
+      pl.addAll([_r(p.dx), _r(p.dy)]);
     } else {
-      list[2] = _r(p.dx);
-      list[3] = _r(p.dy);
+      pl[2] = _r(p.dx);
+      pl[3] = _r(p.dy);
     }
     setState(() {});
   }
 
   void _end() {
+    if (_drag != null) {
+      final moved = _drag!.moved;
+      _drag = null;
+      if (moved) _save();
+      return;
+    }
     final s = live;
     if (s == null) return;
     live = null;
-    _strokes(b).add(s);
-    redo.clear();
-    setState(() {});
-    _save();
+    _checkpoint();
+    list.add(s);
+    // Tự nắn hình: thay nét tay bằng hình chuẩn ngay khi nhấc bút (Hoàn tác một lần sẽ trả lại nét tay).
+    if (s['t'] == 'pen' && _autoShape) {
+      final shape = recognizeShape((s['p'] as List).cast<num>());
+      if (shape != null) {
+        _checkpoint();
+        list[list.length - 1] = {'t': shape.t, 'c': s['c'], 'w': s['w'], 'p': shape.p};
+      }
+    }
+    _commit();
   }
 
   void _erase(Offset p) {
-    final list = _strokes(b);
     final r = (8 + width * 2) / math.max(zoom, .3);
-    final before = list.length;
-    list.removeWhere((s) {
-      if (s is! Map) return false;
-      final pts = _BoardPainter.pts(s);
-      if (s['t'] == 'rect' || s['t'] == 'ellipse' || s['t'] == 'line' || s['t'] == 'arrow') {
-        if (pts.length < 2) return false;
-        final rect = Rect.fromPoints(pts[0], pts[1]).inflate(r);
-        if (!rect.contains(p)) return false;
-        if (s['t'] == 'line' || s['t'] == 'arrow') return _distToSegment(p, pts[0], pts[1]) < r;
-        return true;
-      }
-      if (s['t'] == 'text') return _BoardPainter.strokeBounds(s).inflate(r / 2).contains(p);
-      for (var i = 0; i < pts.length; i++) {
-        if ((pts[i] - p).distance < r) return true;
-        if (i > 0 && _distToSegment(p, pts[i - 1], pts[i]) < r) return true;
-      }
-      return false;
-    });
-    if (list.length != before) {
-      setState(() {});
-      _save();
+    final hit = <Object>{
+      for (final s in list)
+        if (s is Map && s['t'] != 'image' && _hits(s, p, r, solid: s['t'] == 'text')) s,
+    };
+    if (hit.isEmpty) return;
+    if (!_erasing) {
+      _checkpoint(); // một lần cho cả lượt tẩy
+      _erasing = true;
     }
+    list.removeWhere(hit.contains);
+    _sel = null;
+    _commit();
   }
 
-  static double _distToSegment(Offset p, Offset a, Offset b) {
-    final ab = b - a;
-    final len2 = ab.dx * ab.dx + ab.dy * ab.dy;
-    if (len2 == 0) return (p - a).distance;
-    final t = (((p - a).dx * ab.dx + (p - a).dy * ab.dy) / len2).clamp(0.0, 1.0);
-    return (p - (a + ab * t)).distance;
+  // ---------- Chọn / di chuyển / đổi cỡ ----------
+  Rect? get _selBounds {
+    final i = _sel;
+    if (i == null || i >= list.length || list[i] is! Map) return null;
+    final s = list[i] as Map;
+    final g = _geo(s);
+    return const {'image', 'rect', 'ellipse'}.contains(s['t']) && g.pts.length >= 2 ? Rect.fromPoints(g.pts[0], g.pts[1]) : g.bounds;
   }
 
+  bool get _selResizable {
+    final i = _sel;
+    return i != null && i < list.length && const {'image', 'rect', 'ellipse'}.contains((list[i] as Map)['t']);
+  }
+
+  void _selectAt(Offset p) {
+    final tol = 6 / zoom;
+    final sb = _selBounds;
+    if (sb != null && _selResizable && (p - sb.bottomRight).distance < 12 / zoom) {
+      _drag = (orig: list[_sel!] as Map, start: p, resize: true, moved: false);
+      return;
+    }
+    if (sb != null && sb.inflate(tol).contains(p)) {
+      _drag = (orig: list[_sel!] as Map, start: p, resize: false, moved: false);
+      return;
+    }
+    int? hit;
+    for (var i = list.length - 1; i >= 0; i--) {
+      final s = list[i];
+      if (s is Map && _hits(s, p, tol, solid: s['t'] == 'image' || s['t'] == 'text')) {
+        hit = i;
+        break;
+      }
+    }
+    setState(() => _sel = hit);
+    if (hit != null) _drag = (orig: list[hit] as Map, start: p, resize: false, moved: false);
+  }
+
+  void _dragTo(Offset p) {
+    final d = _drag!;
+    final i = _sel;
+    if (i == null || i >= list.length) return;
+    if (!d.moved) {
+      if ((p - d.start).distance * zoom < 2) return;
+      _checkpoint();
+      _drag = (orig: d.orig, start: d.start, resize: d.resize, moved: true);
+    }
+    final delta = p - d.start;
+    final op = (d.orig['p'] as List).cast<num>();
+    List<double> np;
+    if (d.resize) {
+      final a = Offset(math.min(op[0], op[2]).toDouble(), math.min(op[1], op[3]).toDouble());
+      final z = Offset(math.max(op[0], op[2]).toDouble(), math.max(op[1], op[3]).toDouble());
+      var w = math.max(8.0, z.dx - a.dx + delta.dx), h = math.max(8.0, z.dy - a.dy + delta.dy);
+      if (d.orig['t'] == 'image') {
+        // Ảnh giữ đúng tỉ lệ.
+        final k = math.max(w / (z.dx - a.dx), h / (z.dy - a.dy));
+        w = (z.dx - a.dx) * k;
+        h = (z.dy - a.dy) * k;
+      }
+      np = [_r(a.dx), _r(a.dy), _r(a.dx + w), _r(a.dy + h)];
+    } else {
+      np = [for (var k = 0; k < op.length; k++) _r(op[k] + (k.isEven ? delta.dx : delta.dy))];
+    }
+    list[i] = {...d.orig, 'p': np};
+    _bump(list);
+    setState(() {});
+  }
+
+  // ---------- Chữ, ảnh, xuất PNG ----------
   Future<void> _text(Offset p) async {
     final t = await promptBox(context, 'Thêm chữ', 'Nội dung', ok: 'Thêm');
     if (t == null || t.trim().isEmpty) return;
-    _strokes(b).add({
+    _checkpoint();
+    list.add({
       't': 'text',
       'c': color.toARGB32(),
       'w': width,
       'p': [_r(p.dx), _r(p.dy)],
       'text': t,
     });
-    redo.clear();
-    setState(() {});
-    _save();
+    _commit();
+  }
+
+  /// Tải ảnh từ máy lên bảng (đặt giữa khung nhìn, sau đó kéo / đổi cỡ bằng công cụ Chọn).
+  Future<void> _insertImage() async {
+    final ref = await pickAsset(context, FileType.image);
+    if (ref == null || !mounted) return;
+    final img = await BoardImages.load(ref);
+    if (!mounted) return;
+    if (img == null) return toast(context, 'Không đọc được ảnh này.', error: true);
+    final viewW = (_size.isEmpty ? boardWidth : _size.width) / zoom, viewH = (_size.isEmpty ? 560 : _size.height) / zoom;
+    final k = math.min(1.0, math.min(viewW * .6 / img.width, viewH * .6 / img.height));
+    final w = img.width * k, h = img.height * k;
+    final c = _toBoard(_size.isEmpty ? Offset.zero : _center);
+    _checkpoint();
+    list.add({
+      't': 'image',
+      'src': ref,
+      'p': [_r(c.dx - w / 2), _r(c.dy - h / 2), _r(c.dx + w / 2), _r(c.dy + h / 2)],
+    });
+    _sel = list.length - 1;
+    tool = Tool.select;
+    _commit();
   }
 
   /// Lưu toàn bộ nét vẽ thành ảnh PNG (độ nét gấp đôi, tối đa 8000 px mỗi chiều).
   Future<void> _exportPng() async {
-    final box = (_BoardPainter.allBounds(_strokes(b)) ?? const Rect.fromLTWH(0, 0, boardWidth, 560)).inflate(30);
+    await Future.wait([for (final s in list) if (s is Map && s['t'] == 'image') BoardImages.load('${s['src']}')]);
+    final box = (_allBounds(list) ?? const Rect.fromLTWH(0, 0, boardWidth, 560)).inflate(30);
     final z = math.min(2.0, 8000 / math.max(box.width, box.height));
     final size = Size((box.width * z).ceilToDouble(), (box.height * z).ceilToDouble());
     final rec = ui.PictureRecorder();
-    _BoardPainter(_strokes(b), null, (b['bg'] ?? 'grid') as String, z, box.topLeft).paint(Canvas(rec), size);
+    _BoardPainter(list, (b['bg'] ?? 'grid') as String, z, box.topLeft, 0).paint(Canvas(rec), size);
     final img = await rec.endRecording().toImage(size.width.toInt(), size.height.toInt());
     final data = await img.toByteData(format: ui.ImageByteFormat.png);
     if (data == null || !mounted) return;
@@ -448,26 +759,41 @@ class _WhiteboardState extends State<Whiteboard> {
 
   Widget _toolbar() {
     final sel = context.cs.primaryContainer;
+    final auto = context.select<AppState, bool>((a) => a.setting('boardShapes', true));
     Widget toolBtn(Tool t) => IconButton(
       tooltip: _toolInfo[t]!.$2,
       visualDensity: VisualDensity.compact,
       isSelected: tool == t,
       style: IconButton.styleFrom(backgroundColor: tool == t ? sel : null),
       icon: Icon(_toolInfo[t]!.$1, size: 20),
-      onPressed: () => setState(() => tool = t),
+      onPressed: () => setState(() {
+        tool = t;
+        if (t != Tool.select) _sel = null;
+      }),
     );
+    Widget sep() => Container(width: 1, height: 24, margin: const EdgeInsets.symmetric(horizontal: 4), color: context.cs.outlineVariant);
     return Wrap(
       crossAxisAlignment: WrapCrossAlignment.center,
       spacing: 2,
       runSpacing: 2,
       children: [
         for (final t in Tool.values) toolBtn(t),
-        Container(width: 1, height: 24, margin: const EdgeInsets.symmetric(horizontal: 4), color: context.cs.outlineVariant),
+        IconButton(
+          tooltip: auto ? 'Tự nắn hình: BẬT — vẽ tay đường thẳng, hình tròn, chữ nhật, tam giác sẽ thành hình chuẩn (Hoàn tác để giữ nét tay)' : 'Tự nắn hình: TẮT',
+          visualDensity: VisualDensity.compact,
+          isSelected: auto,
+          style: IconButton.styleFrom(backgroundColor: auto ? sel : null),
+          icon: Icon(auto ? Icons.auto_fix_high : Icons.auto_fix_off, size: 20),
+          onPressed: () => context.read<AppState>().setSetting('boardShapes', !auto),
+        ),
+        IconButton(tooltip: 'Tải ảnh từ máy lên bảng', visualDensity: VisualDensity.compact, icon: const Icon(Icons.add_photo_alternate_outlined, size: 20), onPressed: _insertImage),
+        sep(),
         for (final c in boardColors)
           InkWell(
             onTap: () => setState(() {
               color = c;
-              if (tool == Tool.eraser) tool = Tool.pen;
+              if (tool == Tool.eraser || tool == Tool.select || tool == Tool.hand) tool = Tool.pen;
+              _sel = null;
             }),
             child: Container(
               width: 22,
@@ -480,7 +806,7 @@ class _WhiteboardState extends State<Whiteboard> {
               ),
             ),
           ),
-        Container(width: 1, height: 24, margin: const EdgeInsets.symmetric(horizontal: 4), color: context.cs.outlineVariant),
+        sep(),
         PopupMenuButton<double>(
           tooltip: 'Độ dày nét',
           initialValue: width,
@@ -512,35 +838,29 @@ class _WhiteboardState extends State<Whiteboard> {
         PopupMenuButton<String>(
           tooltip: 'Nền bảng',
           onSelected: (v) {
-            setState(() => b['bg'] = v);
-            _save();
+            b['bg'] = v;
+            _commit();
           },
           itemBuilder: (_) => const [PopupMenuItem(value: 'plain', child: Text('Nền trơn')), PopupMenuItem(value: 'grid', child: Text('Kẻ ô')), PopupMenuItem(value: 'dots', child: Text('Chấm'))],
           icon: const Icon(Icons.grid_on, size: 20),
         ),
         IconButton(
-          tooltip: 'Hoàn tác',
+          tooltip: 'Hoàn tác (Ctrl+Z)',
           visualDensity: VisualDensity.compact,
           icon: const Icon(Icons.undo, size: 20),
-          onPressed: _strokes(b).isEmpty
-              ? null
-              : () {
-                  setState(() => redo.add(_strokes(b).removeLast()));
-                  _save();
-                },
+          onPressed: list.isEmpty && _undo.isEmpty ? null : _undoAct,
         ),
         IconButton(
-          tooltip: 'Làm lại',
+          tooltip: 'Làm lại (Ctrl+Y)',
           visualDensity: VisualDensity.compact,
           icon: const Icon(Icons.redo, size: 20),
-          onPressed: redo.isEmpty
-              ? null
-              : () {
-                  setState(() => _strokes(b).add(redo.removeLast()));
-                  _save();
-                },
+          onPressed: _redo.isEmpty ? null : _redoAct,
         ),
-        Container(width: 1, height: 24, margin: const EdgeInsets.symmetric(horizontal: 4), color: context.cs.outlineVariant),
+        if (_selBounds != null) ...[
+          IconButton(tooltip: 'Đưa xuống dưới cùng', visualDensity: VisualDensity.compact, icon: const Icon(Icons.flip_to_back, size: 20), onPressed: _sendToBack),
+          IconButton(tooltip: 'Xoá mục đang chọn (Delete)', visualDensity: VisualDensity.compact, icon: Icon(Icons.delete_outline, size: 20, color: context.cs.error), onPressed: _deleteSelected),
+        ],
+        sep(),
         ..._viewButtons(),
         if (!widget.fill)
           IconButton(
@@ -557,32 +877,53 @@ class _WhiteboardState extends State<Whiteboard> {
           tooltip: 'Xoá hết',
           visualDensity: VisualDensity.compact,
           icon: Icon(Icons.delete_sweep_outlined, size: 20, color: context.cs.error),
-          onPressed: _strokes(b).isEmpty
+          onPressed: list.isEmpty
               ? null
               : () async {
-                  if (!await confirmBox(context, 'Xoá hết bảng?', 'Mọi nét vẽ trên bảng sẽ bị xoá (vẫn khôi phục được từ lịch sử commit).', ok: 'Xoá hết', danger: true)) return;
-                  setState(() {
-                    redo
-                      ..clear()
-                      ..addAll(_strokes(b).reversed);
-                    _strokes(b).clear();
-                  });
-                  _save();
+                  if (!await confirmBox(context, 'Xoá hết bảng?', 'Mọi nét vẽ trên bảng sẽ bị xoá (bấm Hoàn tác để lấy lại, hoặc khôi phục từ lịch sử commit).', ok: 'Xoá hết', danger: true)) return;
+                  _checkpoint();
+                  list.clear();
+                  _sel = null;
+                  _commit();
                 },
         ),
       ],
     );
   }
 
+  // ---------- Bàn phím ----------
+  KeyEventResult _key(FocusNode node, KeyEvent e) {
+    if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
+    final k = HardwareKeyboard.instance;
+    final ctrl = k.isControlPressed || k.isMetaPressed;
+    final key = e.logicalKey;
+    if (ctrl && key == LogicalKeyboardKey.keyZ) {
+      k.isShiftPressed ? _redoAct() : _undoAct();
+    } else if (ctrl && key == LogicalKeyboardKey.keyY) {
+      _redoAct();
+    } else if (_sel != null && (key == LogicalKeyboardKey.delete || key == LogicalKeyboardKey.backspace)) {
+      _deleteSelected();
+    } else if (_sel != null && key == LogicalKeyboardKey.escape) {
+      setState(() => _sel = null);
+    } else {
+      return KeyEventResult.ignored;
+    }
+    return KeyEventResult.handled;
+  }
+
   // ---------- Thao tác chuột / cảm ứng ----------
   void _down(PointerDownEvent e) {
+    if (!widget.ro) _focus.requestFocus();
     if (e.kind == PointerDeviceKind.touch || e.kind == PointerDeviceKind.stylus) {
       _touches[e.pointer] = e.localPosition;
       if (_touches.length == 2) {
-        // Ngón thứ hai: bỏ nét đang vẽ dở, chuyển sang kéo / chụm để phóng to.
+        // Ngón thứ hai: bỏ nét đang vẽ dở / thao tác kéo, chuyển sang kéo / chụm để phóng to.
         live = null;
+        if (_drag?.moved ?? false) list[_sel!] = _drag!.orig;
+        _drag = null;
         final ps = _touches.values.toList();
         _pinch = (focal: (ps[0] + ps[1]) / 2, dist: math.max((ps[0] - ps[1]).distance, 1), zoom: zoom, origin: origin);
+        _bump(list);
         setState(() {});
         return;
       }
@@ -682,7 +1023,13 @@ class _WhiteboardState extends State<Whiteboard> {
       final canvas = SizedBox(
         width: w,
         height: h,
-        child: CustomPaint(painter: _BoardPainter(_strokes(b), live, bg, zoom, origin)),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            RepaintBoundary(child: CustomPaint(painter: _BoardPainter(list, bg, zoom, origin, _revOf(list)))),
+            CustomPaint(painter: _LivePainter(live, _selBounds, _selResizable, context.cs.primary, zoom, origin)),
+          ],
+        ),
       );
       return Container(
         decoration: BoxDecoration(
@@ -692,25 +1039,31 @@ class _WhiteboardState extends State<Whiteboard> {
         clipBehavior: Clip.antiAlias,
         child: touchRo
             ? GestureDetector(onTap: widget.onTapReadOnly, child: canvas)
-            : MouseRegion(
-                cursor: _panning
-                    ? SystemMouseCursors.grabbing
-                    : tool == Tool.hand || widget.ro
-                    ? SystemMouseCursors.grab
-                    : tool == Tool.text
-                    ? SystemMouseCursors.text
-                    : SystemMouseCursors.precise,
-                child: Listener(
-                  behavior: HitTestBehavior.opaque,
-                  onPointerDown: _down,
-                  onPointerMove: _moveEv,
-                  onPointerUp: _up,
-                  onPointerCancel: _up,
-                  onPointerSignal: _signal,
-                  onPointerPanZoomStart: _panZoomStart,
-                  onPointerPanZoomUpdate: _panZoomUpdate,
-                  // Chặn menu chuột phải của hệ thống khi kéo bảng bằng chuột phải.
-                  child: GestureDetector(onSecondaryTapDown: (_) {}, child: canvas),
+            : Focus(
+                focusNode: _focus,
+                onKeyEvent: _key,
+                child: MouseRegion(
+                  cursor: _panning
+                      ? SystemMouseCursors.grabbing
+                      : tool == Tool.hand || widget.ro
+                      ? SystemMouseCursors.grab
+                      : tool == Tool.select
+                      ? (_drag != null ? SystemMouseCursors.move : SystemMouseCursors.basic)
+                      : tool == Tool.text
+                      ? SystemMouseCursors.text
+                      : SystemMouseCursors.precise,
+                  child: Listener(
+                    behavior: HitTestBehavior.opaque,
+                    onPointerDown: _down,
+                    onPointerMove: _moveEv,
+                    onPointerUp: _up,
+                    onPointerCancel: _up,
+                    onPointerSignal: _signal,
+                    onPointerPanZoomStart: _panZoomStart,
+                    onPointerPanZoomUpdate: _panZoomUpdate,
+                    // Chặn menu chuột phải của hệ thống khi kéo bảng bằng chuột phải.
+                    child: GestureDetector(onSecondaryTapDown: (_) {}, child: canvas),
+                  ),
                 ),
               ),
       );
