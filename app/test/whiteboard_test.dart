@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:so_tay_dsa/app_state.dart';
 import 'package:so_tay_dsa/core/storage.dart';
+import 'package:so_tay_dsa/ui/drop.dart';
 import 'package:so_tay_dsa/ui/whiteboard.dart';
 
 void main() {
@@ -15,14 +17,30 @@ void main() {
     await Storage.init(override: Directory.systemTemp.createTempSync('sotay-board'));
   });
 
-  Future<Map<String, dynamic>> pump(WidgetTester t) async {
+  Future<void> native(String method, Object? args) => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.handlePlatformMessage(
+    'desktop_drop',
+    const StandardMethodCodec().encodeMethodCall(MethodCall(method, args)),
+    (_) {},
+  );
+
+  Future<Map<String, dynamic>> pump(WidgetTester t, {List<String>? outerDrops}) async {
     final block = <String, dynamic>{'id': 'b1', 'type': 'board', 'title': '', 'height': 560, 'bg': 'plain', 'strokes': <dynamic>[]};
     t.view.physicalSize = const Size(1400, 900);
     t.view.devicePixelRatio = 1;
     addTearDown(t.view.reset);
     await t.pumpWidget(ChangeNotifierProvider(
       create: (_) => AppState(),
-      child: MaterialApp(home: Scaffold(body: Whiteboard(block: block, ro: false, fill: true, onChanged: () {}))),
+      child: MaterialApp(
+        home: Scaffold(
+          body: AppDropTarget(
+            child: DropZone(
+              hint: 'trang',
+              onDrop: (files, _) async => outerDrops?.addAll(files.map((f) => f.name)),
+              child: Padding(padding: const EdgeInsets.all(100), child: Whiteboard(block: block, ro: false, fill: true, onChanged: () {})),
+            ),
+          ),
+        ),
+      ),
     ));
     return block;
   }
@@ -74,5 +92,41 @@ void main() {
     await t.sendKeyEvent(LogicalKeyboardKey.delete);
     await t.pump();
     expect(strokes, isEmpty);
+  });
+
+  testWidgets('kéo thả: ảnh vào bảng thì thành ảnh trên bảng, thả ra ngoài bảng thì vùng ngoài nhận', (t) async {
+    final dir = Directory.systemTemp.createTempSync('sotay-drop');
+    final img = File('${dir.path}/anh.png');
+    await t.runAsync(() async {
+      final rec = ui.PictureRecorder();
+      Canvas(rec).drawRect(const Rect.fromLTWH(0, 0, 40, 20), Paint()..color = const Color(0xFF0969DA));
+      final data = await (await rec.endRecording().toImage(40, 20)).toByteData(format: ui.ImageByteFormat.png);
+      img.writeAsBytesSync(data!.buffer.asUint8List());
+    });
+    final doc = File('${dir.path}/bai.pdf')..writeAsStringSync('%PDF-1.4');
+    final outer = <String>[];
+    final block = await pump(t, outerDrops: outer);
+    final board = t.getRect(find.byType(Listener).last);
+
+    await t.runAsync(() async {
+      await native('entered', [board.center.dx, board.center.dy]);
+      await native('performOperation', [img.path]);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    await t.pump();
+    final strokes = block['strokes'] as List;
+    expect(strokes, hasLength(1));
+    expect((strokes.single as Map)['t'], 'image');
+    expect('${(strokes.single as Map)['src']}', startsWith('asset:'));
+    expect(outer, isEmpty);
+
+    await t.runAsync(() async {
+      await native('entered', [50.0, 50.0]); // lề ngoài bảng
+      await native('performOperation', [doc.path]);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    });
+    await t.pump();
+    expect(outer, ['bai.pdf']);
+    expect(strokes, hasLength(1));
   });
 }

@@ -1,6 +1,11 @@
 // Khung ứng dụng: thanh menu (desktop) / thanh dưới (Android), danh sách notebook, Sổ tay ⇄ IDE, thanh trạng thái.
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart' show FileType;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
 import '../app_state.dart';
@@ -9,6 +14,8 @@ import '../core/templates.dart';
 import '../core/vcs.dart';
 import 'blocks.dart' as blocks;
 import 'contest.dart';
+import 'drop.dart';
+import 'file_block.dart';
 import 'board_tab.dart';
 import 'extras.dart';
 import 'ide.dart';
@@ -267,11 +274,106 @@ class _ShellState extends State<Shell> {
             decoration: BoxDecoration(color: context.cs.surfaceContainerLow, border: Border(right: BorderSide(color: context.cs.outlineVariant))),
             child: const TocPanel(),
           ),
-          const Expanded(child: NotebookView()),
+          Expanded(child: _pageZone(a, const NotebookView())),
         ]);
 
+  // ---------- Kéo thả file từ ngoài vào ----------
+  static const _codeExts = {'.cpp', '.cc', '.cxx', '.c', '.h', '.hpp', '.py', '.txt', '.in', '.out', '.inp', '.ans', '.md'};
+
+  /// Notebook (.dsanote.json) và bản sao lưu: mở / nhập ở bất cứ đâu thả vào.
+  Future<List<DropItem>> _dropNotebooks(List<DropItem> files) async {
+    final rest = <DropItem>[];
+    for (final f in files) {
+      final n = f.name.toLowerCase();
+      if (n.endsWith('.dsanote.json') || (n.startsWith('sao-luu') && n.endsWith('.json'))) {
+        final text = await f.readAsString();
+        if (mounted) await handleIncoming(context, text, onOpen: _open);
+      } else {
+        rest.add(f);
+      }
+    }
+    return rest;
+  }
+
+  /// Thả vào trang sổ tay: ảnh → khối ảnh, video → khối video, file khác → một khối "File đính kèm" ở cuối trang.
+  Future<void> _dropToPage(List<DropItem> files, Offset _) async {
+    final app = context.read<AppState>();
+    final page = app.page;
+    if (page == null) return;
+    final blocks0 = page['blocks'] as List;
+    Json? fileBlock;
+    String? last;
+    for (final f in files) {
+      final bytes = await f.readAsBytes();
+      if (!mounted) return;
+      final mime = mimeOf(f.name);
+      final a = await storeAsset(context, f.name, bytes, type: mime.startsWith('video/') ? FileType.video : FileType.any);
+      if (a == null || !mounted) continue;
+      if (a.type.startsWith('image/')) {
+        final b = blocks.newBlock('image')..['src'] = a.ref;
+        blocks0.add(b);
+        last = b['id'] as String;
+      } else if (a.type.startsWith('video/')) {
+        final b = blocks.newBlock('video')
+          ..['url'] = a.ref
+          ..['title'] = p.basenameWithoutExtension(f.name);
+        blocks0.add(b);
+        last = b['id'] as String;
+      } else {
+        if (fileBlock == null) {
+          fileBlock = blocks.newBlock('file');
+          blocks0.add(fileBlock);
+        }
+        (fileBlock['files'] as List).add(fileEntry(a));
+        last = fileBlock['id'] as String;
+      }
+    }
+    if (last == null) return;
+    app.changed();
+    final target = last;
+    WidgetsBinding.instance.addPostFrameCallback((_) => scrollToAnchor(target));
+  }
+
+  /// Thả vào IDE: mở file code / dữ liệu thành tab mới.
+  Future<void> _dropToIde(List<DropItem> files, Offset _) async {
+    final ide = context.read<IdeModel>();
+    var skipped = 0;
+    for (final f in files) {
+      if (!_codeExts.contains(p.extension(f.name).toLowerCase())) {
+        skipped++;
+        continue;
+      }
+      if (!Platform.isAndroid && f.path.isNotEmpty && File(f.path).existsSync()) {
+        ide.openPath(f.path);
+      } else {
+        ide.openCode(f.name, utf8.decode(await f.readAsBytes(), allowMalformed: true));
+      }
+    }
+    if (skipped > 0 && mounted) toast(context, 'IDE chỉ mở file code / văn bản — bỏ qua $skipped file.');
+  }
+
+  void _dropElsewhere(List<DropItem> files) {
+    final a = context.read<AppState>();
+    toast(
+      context,
+      a.mode == 'notes' && (a.repo == null || a.readOnly)
+          ? 'Mở một notebook (không ở chế độ xem commit cũ) rồi thả file vào trang.'
+          : 'Thả file vào trang sổ tay, IDE hoặc bảng trắng.',
+    );
+  }
+
+  Widget _pageZone(AppState a, Widget child) => DropZone(
+    onDrop: a.repo == null || a.readOnly || a.contestId != null || a.page == null ? null : _dropToPage,
+    hint: 'Thả vào trang: ảnh, video, file đính kèm',
+    child: child,
+  );
+
+  Widget _ideZone() => DropZone(onDrop: _dropToIde, hint: 'Thả file code để mở trong IDE', child: const IdeView());
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => AppDropTarget(intercept: _dropNotebooks, fallback: _dropElsewhere, child: _body(context));
+
+  Widget _body(BuildContext context) {
     final a = context.watch<AppState>();
     final compact = context.compact;
     final ide = a.mode == 'ide';
@@ -290,7 +392,7 @@ class _ShellState extends State<Shell> {
               Expanded(
                 child: Row(children: [
                   _rail(a),
-                  Expanded(child: IndexedStack(index: tab, children: [_notesDesktop(a), const IdeView(), const BoardTab()])),
+                  Expanded(child: IndexedStack(index: tab, children: [_notesDesktop(a), _ideZone(), const BoardTab()])),
                 ]),
               ),
               if (tab == 0) _statusBar(a),
@@ -355,7 +457,7 @@ class _ShellState extends State<Shell> {
       drawer: tab == 0 && has ? Drawer(child: SafeArea(child: Builder(builder: (c) => TocPanel(onNavigate: () => Navigator.pop(c))))) : null,
       body: Column(children: [
         const UpdateBanner(),
-        Expanded(child: IndexedStack(index: tab, children: [has ? const NotebookView() : _home(), const IdeView(), const BoardTab()])),
+        Expanded(child: IndexedStack(index: tab, children: [has ? _pageZone(a, const NotebookView()) : _home(), _ideZone(), const BoardTab()])),
       ]),
       bottomNavigationBar: NavigationBar(
         height: 60,

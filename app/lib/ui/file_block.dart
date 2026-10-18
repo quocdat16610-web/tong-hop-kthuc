@@ -12,19 +12,34 @@ import 'package:url_launcher/url_launcher.dart';
 import '../app_state.dart';
 import '../core/storage.dart';
 import '../core/vcs.dart' show Json;
+import 'drop.dart';
 import 'media.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
 List _files(Json b) => (b['files'] ??= <dynamic>[]) as List;
 
+Json fileEntry(StoredAsset f) => {'src': f.ref, 'name': f.name, 'size': f.size, 'type': f.type};
+
 /// Chọn một hay nhiều file và thêm vào khối. Trả về số file đã thêm.
 Future<int> addFilesTo(BuildContext context, Json block) async {
   final picked = await pickAssets(context, FileType.any, multiple: true);
-  for (final f in picked) {
-    _files(block).add({'src': f.ref, 'name': f.name, 'size': f.size, 'type': f.type});
-  }
+  _files(block).addAll(picked.map(fileEntry));
   return picked.length;
+}
+
+/// Kéo thả file từ ngoài vào khối.
+Future<int> dropFilesTo(BuildContext context, Json block, List<DropItem> files) async {
+  var n = 0;
+  for (final f in files) {
+    final bytes = await f.readAsBytes();
+    if (!context.mounted) break;
+    final a = await storeAsset(context, f.name, bytes);
+    if (a == null) continue;
+    _files(block).add(fileEntry(a));
+    n++;
+  }
+  return n;
 }
 
 IconData _icon(String name, String type) {
@@ -66,7 +81,7 @@ class FileBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.read<AppState>();
     final files = _files(block);
-    return Column(
+    final body = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
@@ -95,10 +110,18 @@ class FileBlock extends StatelessWidget {
             alignment: Alignment.center,
             margin: const EdgeInsets.only(top: 6),
             color: context.cs.surfaceContainer,
-            child: Text(ro ? 'Chưa có file.' : 'Chưa có file — bấm "Tải file lên" để chọn một hoặc nhiều file trên máy.', style: context.tt.bodySmall),
+            child: Text(ro ? 'Chưa có file.' : 'Chưa có file — bấm "Tải file lên" hoặc kéo thả file vào đây.', style: context.tt.bodySmall),
           ),
         for (final f in files.whereType<Map>()) _row(context, app, f),
       ],
+    );
+    if (ro) return body;
+    return DropZone(
+      hint: 'Thả để đính kèm vào khối này',
+      onDrop: (dropped, _) async {
+        if (await dropFilesTo(context, block, dropped) > 0) app.changed();
+      },
+      child: body,
     );
   }
 

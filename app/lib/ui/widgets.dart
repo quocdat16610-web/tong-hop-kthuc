@@ -182,21 +182,29 @@ String formatSize(int bytes) => bytes < 1024
     ? '${(bytes / 1024).toStringAsFixed(1)} KB'
     : '${(bytes / 1048576).toStringAsFixed(1)} MB';
 
+typedef StoredAsset = ({String ref, String name, int size, String type});
+
+/// Lưu một file vào kho ảnh / file của app (hỏi lại nếu file quá lớn). Trả về null nếu người dùng huỷ.
+Future<StoredAsset?> storeAsset(BuildContext context, String name, Uint8List bytes, {FileType type = FileType.any}) async {
+  if (bytes.length > 200 * 1024 * 1024 && context.mounted) {
+    if (!await confirmBox(context, 'File lớn', 'File "$name" ${(bytes.length / 1048576).round()} MB sẽ làm file chia sẻ rất nặng. Vẫn thêm?', ok: 'Thêm')) return null;
+  }
+  var mime = mimeOf(name);
+  if (type == FileType.video && !mime.startsWith('video/')) mime = 'video/${name.contains('.') ? name.split('.').last.toLowerCase() : ''}';
+  return (ref: Storage.I.addAsset(bytes, type: mime, name: name), name: name, size: bytes.length, type: mime);
+}
+
 /// Chọn file trên máy và lưu vào kho ảnh / file của app. Trả về danh sách (tham chiếu "asset:…", tên, kích thước).
-Future<List<({String ref, String name, int size, String type})>> pickAssets(BuildContext context, FileType type, {bool multiple = false}) async {
+Future<List<StoredAsset>> pickAssets(BuildContext context, FileType type, {bool multiple = false}) async {
   final r = await FilePicker.platform.pickFiles(type: type, withData: true, allowMultiple: multiple);
   if (r == null || r.files.isEmpty) return const [];
-  final out = <({String ref, String name, int size, String type})>[];
+  final out = <StoredAsset>[];
   for (final f in r.files) {
     Uint8List? bytes = f.bytes;
     if (bytes == null && f.path != null) bytes = await File(f.path!).readAsBytes();
-    if (bytes == null) continue;
-    if (bytes.length > 200 * 1024 * 1024 && context.mounted) {
-      if (!await confirmBox(context, 'File lớn', 'File "${f.name}" ${(bytes.length / 1048576).round()} MB sẽ làm file chia sẻ rất nặng. Vẫn thêm?', ok: 'Thêm')) continue;
-    }
-    var mime = mimeOf(f.name);
-    if (type == FileType.video && !mime.startsWith('video/')) mime = 'video/${(f.extension ?? '').toLowerCase()}';
-    out.add((ref: Storage.I.addAsset(bytes, type: mime, name: f.name), name: f.name, size: bytes.length, type: mime));
+    if (bytes == null || !context.mounted) continue;
+    final a = await storeAsset(context, f.name, bytes, type: type);
+    if (a != null) out.add(a);
   }
   return out;
 }

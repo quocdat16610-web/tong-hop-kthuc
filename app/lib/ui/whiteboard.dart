@@ -16,6 +16,7 @@ import '../app_state.dart';
 import '../core/shapes.dart';
 import '../core/storage.dart';
 import '../core/vcs.dart' show Json;
+import 'drop.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -706,22 +707,48 @@ class _WhiteboardState extends State<Whiteboard> {
   Future<void> _insertImage() async {
     final ref = await pickAsset(context, FileType.image);
     if (ref == null || !mounted) return;
+    await _placeImage(ref, _toBoard(_size.isEmpty ? Offset.zero : _center));
+  }
+
+  /// Đặt ảnh có tâm tại điểm `at` (toạ độ bảng), vừa tối đa 60% khung nhìn, rồi chọn ảnh đó.
+  Future<bool> _placeImage(String ref, Offset at) async {
     final img = await BoardImages.load(ref);
-    if (!mounted) return;
-    if (img == null) return toast(context, 'Không đọc được ảnh này.', error: true);
+    if (!mounted) return false;
+    if (img == null) {
+      toast(context, 'Không đọc được ảnh này.', error: true);
+      return false;
+    }
     final viewW = (_size.isEmpty ? boardWidth : _size.width) / zoom, viewH = (_size.isEmpty ? 560 : _size.height) / zoom;
     final k = math.min(1.0, math.min(viewW * .6 / img.width, viewH * .6 / img.height));
     final w = img.width * k, h = img.height * k;
-    final c = _toBoard(_size.isEmpty ? Offset.zero : _center);
     _checkpoint();
     list.add({
       't': 'image',
       'src': ref,
-      'p': [_r(c.dx - w / 2), _r(c.dy - h / 2), _r(c.dx + w / 2), _r(c.dy + h / 2)],
+      'p': [_r(at.dx - w / 2), _r(at.dy - h / 2), _r(at.dx + w / 2), _r(at.dy + h / 2)],
     });
     _sel = list.length - 1;
     tool = Tool.select;
     _commit();
+    return true;
+  }
+
+  /// Kéo thả ảnh từ ngoài vào bảng: đặt ngay chỗ thả (nhiều ảnh thì xếp chéo nhau).
+  Future<void> _dropFiles(List<DropItem> files, Offset local) async {
+    var at = _toBoard(local);
+    var skipped = 0;
+    for (final f in files) {
+      if (!mimeOf(f.name).startsWith('image/')) {
+        skipped++;
+        continue;
+      }
+      final bytes = await f.readAsBytes();
+      if (!mounted) return;
+      final a = await storeAsset(context, f.name, bytes, type: FileType.image);
+      if (a == null || !mounted) continue;
+      if (await _placeImage(a.ref, at)) at += const Offset(28, 28) / zoom;
+    }
+    if (skipped > 0 && mounted) toast(context, 'Bảng trắng chỉ nhận ảnh — bỏ qua $skipped file khác (thả vào trang sổ tay để đính kèm).');
   }
 
   /// Lưu toàn bộ nét vẽ thành ảnh PNG (độ nét gấp đôi, tối đa 8000 px mỗi chiều).
@@ -1031,7 +1058,7 @@ class _WhiteboardState extends State<Whiteboard> {
           ],
         ),
       );
-      return Container(
+      final framed = Container(
         decoration: BoxDecoration(
           border: Border.all(color: context.cs.outlineVariant),
           borderRadius: BorderRadius.circular(4),
@@ -1067,6 +1094,7 @@ class _WhiteboardState extends State<Whiteboard> {
                 ),
               ),
       );
+      return widget.ro ? framed : DropZone(onDrop: _dropFiles, hint: 'Thả ảnh vào bảng', child: framed);
     }
 
     final toolbar = widget.ro ? (touchRo ? null : Wrap(children: _viewButtons())) : _toolbar();
