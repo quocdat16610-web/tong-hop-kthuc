@@ -284,7 +284,7 @@ class _ShellState extends State<Shell> {
   Future<List<DropItem>> _dropNotebooks(List<DropItem> files) async {
     final rest = <DropItem>[];
     for (final f in files) {
-      final n = f.name.toLowerCase();
+      final n = f.fileName.toLowerCase();
       if (n.endsWith('.dsanote.json') || (n.startsWith('sao-luu') && n.endsWith('.json'))) {
         final text = await f.readAsString();
         if (mounted) await handleIncoming(context, text, onOpen: _open);
@@ -306,8 +306,8 @@ class _ShellState extends State<Shell> {
     for (final f in files) {
       final bytes = await f.readAsBytes();
       if (!mounted) return;
-      final mime = mimeOf(f.name);
-      final a = await storeAsset(context, f.name, bytes, type: mime.startsWith('video/') ? FileType.video : FileType.any);
+      final mime = mimeOf(f.fileName);
+      final a = await storeAsset(context, f.fileName, bytes, type: mime.startsWith('video/') ? FileType.video : FileType.any);
       if (a == null || !mounted) continue;
       if (a.type.startsWith('image/')) {
         final b = blocks.newBlock('image')..['src'] = a.ref;
@@ -316,7 +316,7 @@ class _ShellState extends State<Shell> {
       } else if (a.type.startsWith('video/')) {
         final b = blocks.newBlock('video')
           ..['url'] = a.ref
-          ..['title'] = p.basenameWithoutExtension(f.name);
+          ..['title'] = p.basenameWithoutExtension(f.fileName);
         blocks0.add(b);
         last = b['id'] as String;
       } else {
@@ -339,14 +339,14 @@ class _ShellState extends State<Shell> {
     final ide = context.read<IdeModel>();
     var skipped = 0;
     for (final f in files) {
-      if (!_codeExts.contains(p.extension(f.name).toLowerCase())) {
+      if (!_codeExts.contains(p.extension(f.fileName).toLowerCase())) {
         skipped++;
         continue;
       }
       if (!Platform.isAndroid && f.path.isNotEmpty && File(f.path).existsSync()) {
         ide.openPath(f.path);
       } else {
-        ide.openCode(f.name, utf8.decode(await f.readAsBytes(), allowMalformed: true));
+        ide.openCode(f.fileName, utf8.decode(await f.readAsBytes(), allowMalformed: true));
       }
     }
     if (skipped > 0 && mounted) toast(context, 'IDE chỉ mở file code / văn bản — bỏ qua $skipped file.');

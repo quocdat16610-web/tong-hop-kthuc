@@ -6,7 +6,12 @@ import 'package:flutter/material.dart';
 
 import 'theme.dart';
 
-export 'package:desktop_drop/desktop_drop.dart' show DropItem;
+export 'package:desktop_drop/desktop_drop.dart' show DropItem, DropItemFile;
+
+extension DropItemName on DropItem {
+  /// Tên file (không kèm thư mục) — đường dẫn có thể dùng cả `/` lẫn `\` tuỳ hệ điều hành / app gửi file.
+  String get fileName => name.split(RegExp(r'[\\/]')).last;
+}
 
 /// `local`: vị trí thả, tính trong vùng.
 typedef DropHandler = Future<void> Function(List<DropItem> files, Offset local);

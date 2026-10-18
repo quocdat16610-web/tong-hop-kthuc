@@ -738,13 +738,13 @@ class _WhiteboardState extends State<Whiteboard> {
     var at = _toBoard(local);
     var skipped = 0;
     for (final f in files) {
-      if (!mimeOf(f.name).startsWith('image/')) {
+      if (!mimeOf(f.fileName).startsWith('image/')) {
         skipped++;
         continue;
       }
       final bytes = await f.readAsBytes();
       if (!mounted) return;
-      final a = await storeAsset(context, f.name, bytes, type: FileType.image);
+      final a = await storeAsset(context, f.fileName, bytes, type: FileType.image);
       if (a == null || !mounted) continue;
       if (await _placeImage(a.ref, at)) at += const Offset(28, 28) / zoom;
     }

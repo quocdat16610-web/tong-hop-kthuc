@@ -34,7 +34,7 @@ Future<int> dropFilesTo(BuildContext context, Json block, List<DropItem> files) 
   for (final f in files) {
     final bytes = await f.readAsBytes();
     if (!context.mounted) break;
-    final a = await storeAsset(context, f.name, bytes);
+    final a = await storeAsset(context, f.fileName, bytes);
     if (a == null) continue;
     _files(block).add(fileEntry(a));
     n++;

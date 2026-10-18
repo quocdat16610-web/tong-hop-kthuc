@@ -6,6 +6,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 import 'package:so_tay_dsa/app_state.dart';
 import 'package:so_tay_dsa/core/storage.dart';
@@ -35,7 +36,7 @@ void main() {
           body: AppDropTarget(
             child: DropZone(
               hint: 'trang',
-              onDrop: (files, _) async => outerDrops?.addAll(files.map((f) => f.name)),
+              onDrop: (files, _) async => outerDrops?.addAll(files.map((f) => f.fileName)),
               child: Padding(padding: const EdgeInsets.all(100), child: Whiteboard(block: block, ro: false, fill: true, onChanged: () {})),
             ),
           ),
@@ -96,14 +97,14 @@ void main() {
 
   testWidgets('kéo thả: ảnh vào bảng thì thành ảnh trên bảng, thả ra ngoài bảng thì vùng ngoài nhận', (t) async {
     final dir = Directory.systemTemp.createTempSync('sotay-drop');
-    final img = File('${dir.path}/anh.png');
+    final img = File(p.join(dir.path, 'anh.png'));
     await t.runAsync(() async {
       final rec = ui.PictureRecorder();
       Canvas(rec).drawRect(const Rect.fromLTWH(0, 0, 40, 20), Paint()..color = const Color(0xFF0969DA));
       final data = await (await rec.endRecording().toImage(40, 20)).toByteData(format: ui.ImageByteFormat.png);
       img.writeAsBytesSync(data!.buffer.asUint8List());
     });
-    final doc = File('${dir.path}/bai.pdf')..writeAsStringSync('%PDF-1.4');
+    final doc = File(p.join(dir.path, 'bai.pdf'))..writeAsStringSync('%PDF-1.4');
     final outer = <String>[];
     final block = await pump(t, outerDrops: outer);
     final board = t.getRect(find.byType(Listener).last);
@@ -128,5 +129,11 @@ void main() {
     await t.pump();
     expect(outer, ['bai.pdf']);
     expect(strokes, hasLength(1));
+  });
+
+  test('tên file thả vào không kèm thư mục, dù đường dẫn dùng / hay \\', () {
+    expect(DropItemFile(r'C:\Users\a\Desktop\bai tap.pdf').fileName, 'bai tap.pdf');
+    expect(DropItemFile('/home/a/anh.png').fileName, 'anh.png');
+    expect(DropItemFile(r'D:\tmp/sotay-drop/bai.pdf').fileName, 'bai.pdf');
   });
 }
