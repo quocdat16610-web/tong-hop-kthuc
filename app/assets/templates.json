@@ -1,0 +1,59 @@
+{
+ "simTemplates": [
+  {
+   "id": "blank",
+   "name": "Trống",
+   "input": "",
+   "code": "// Viết mô phỏng bằng JavaScript (cú pháp gần giống C++).\n// Xem nút \"📖 API\" để biết các hàm viz.*\nconst a = viz.array(readNumbers(), { name: 'a' });\n"
+  },
+  {
+   "id": "bubble",
+   "name": "Sắp xếp nổi bọt (Bubble sort)",
+   "input": "5 1 4 2 8 3",
+   "code": "const a = viz.array(readNumbers(), { name: 'a', bars: true });\nconst n = a.length;\nfor (let i = 0; i < n - 1; i++) {\n  for (let j = 0; j < n - 1 - i; j++) {\n    viz.var('i', i); viz.var('j', j);\n    if (a.compare(j, j + 1) > 0) a.swap(j, j + 1);\n  }\n  a.mark(n - 1 - i, 'done', `Phần tử ${a.get(n - 1 - i)} đã về đúng chỗ`);\n}\na.mark(0, 'done');\n"
+  },
+  {
+   "id": "insertion",
+   "name": "Sắp xếp chèn (Insertion sort)",
+   "input": "7 3 9 1 5 2",
+   "code": "const a = viz.array(readNumbers(), { name: 'a' });\nfor (let i = 1; i < a.length; i++) {\n  let j = i;\n  a.pointer('i', i);\n  while (j > 0 && a.compare(j - 1, j) > 0) {\n    a.swap(j - 1, j);\n    j--;\n  }\n  a.markRange(0, i, 'sorted', `Đoạn a[0..${i}] đã được sắp xếp`);\n}\n"
+  },
+  {
+   "id": "binsearch",
+   "name": "Tìm kiếm nhị phân",
+   "input": "1 3 4 7 9 11 15 20 25\n11",
+   "code": "const nums = readNumbers();\nconst x = nums.pop();               // dòng 2 của dữ liệu vào là số cần tìm\nconst a = viz.array(nums.sort((p, q) => p - q), { name: 'a' });\nviz.var('x', x);\nlet lo = 0, hi = a.length - 1;\nviz.auto(false);                    // tự gọi viz.step() để kiểm soát từng bước\nwhile (lo <= hi) {\n  const mid = (lo + hi) >> 1;\n  a.pointer('lo', lo); a.pointer('hi', hi); a.pointer('mid', mid);\n  a.highlight(mid, 'compare');\n  viz.step(`lo=${lo}, hi=${hi}, mid=${mid}: a[mid]=${a.get(mid)}`);\n  if (a.get(mid) === x) { a.mark(mid, 'found'); viz.step(`Tìm thấy ${x} tại vị trí ${mid}`); break; }\n  if (a.get(mid) < x) { a.markRange(lo, mid, 'dim'); lo = mid + 1; }\n  else { a.markRange(mid, hi, 'dim'); hi = mid - 1; }\n}\nif (lo > hi) viz.step('Không tìm thấy');\n"
+  },
+  {
+   "id": "stack",
+   "name": "Stack: kiểm tra ngoặc",
+   "input": "{[()()]}",
+   "code": "const s = viz.stack([], { name: 'st' });\nconst pair = { ')': '(', ']': '[', '}': '{' };\nlet ok = true;\nfor (const ch of INPUT.trim()) {\n  viz.var('ch', ch);\n  if ('([{'.includes(ch)) s.push(ch);\n  else if (s.empty() || s.top() !== pair[ch]) { ok = false; break; }\n  else s.pop();\n}\nviz.step(ok && s.empty() ? 'Chuỗi ngoặc hợp lệ ✔' : 'Chuỗi ngoặc KHÔNG hợp lệ ✘');\n"
+  },
+  {
+   "id": "bfsgrid",
+   "name": "BFS trên lưới (tìm đường ngắn nhất)",
+   "input": "S..#......\n.#.#.####.\n.#...#....\n.####.#.#.\n......#.#E",
+   "code": "const rows = INPUT.trim().split('\\n');\nconst g = viz.grid(rows.map(r => r.split('').map(ch => (ch === '.' || ch === '#') ? '' : ch)), { name: 'mê cung' });\nlet S, E;\nviz.auto(false);\nrows.forEach((r, i) => r.split('').forEach((ch, j) => {\n  if (ch === '#') g.mark(i, j, 'wall');\n  if (ch === 'S') { S = [i, j]; g.mark(i, j, 'start'); }\n  if (ch === 'E') { E = [i, j]; g.mark(i, j, 'end'); }\n}));\nviz.step('Mê cung ban đầu');\nviz.auto(true);\nconst q = [S], par = {}, seen = new Set([S + '']);\nconst dr = [-1, 1, 0, 0], dc = [0, 0, -1, 1];\nwhile (q.length) {\n  const [r, c] = q.shift();\n  if (r === E[0] && c === E[1]) break;\n  for (let k = 0; k < 4; k++) {\n    const nr = r + dr[k], nc = c + dc[k];\n    if (!g.inside(nr, nc) || g.state(nr, nc) === 'wall' || seen.has([nr, nc] + '')) continue;\n    seen.add([nr, nc] + ''); par[[nr, nc]] = [r, c]; q.push([nr, nc]);\n    if (g.state(nr, nc) !== 'end') g.mark(nr, nc, 'visited', `Thăm ô (${nr}, ${nc})`);\n  }\n}\nlet cur = par[E], len = 1;\nwhile (cur && cur + '' !== S + '') { g.mark(cur[0], cur[1], 'path', 'Truy vết đường đi'); cur = par[cur]; len++; }\nviz.step(par[E] ? `Đường đi ngắn nhất dài ${len} bước` : 'Không có đường đi');\n"
+  },
+  {
+   "id": "dfsgraph",
+   "name": "DFS trên đồ thị",
+   "input": "0 1\n0 2\n1 3\n1 4\n2 5\n4 5",
+   "code": "const nums = readNumbers();\nconst edges = [];\nfor (let i = 0; i + 1 < nums.length; i += 2) edges.push([nums[i], nums[i + 1]]);\nconst G = viz.graph({ edges, name: 'G' });\nconst seen = new Set();\nconst order = [];\nfunction dfs(u) {\n  seen.add(u); order.push(u);\n  G.visit(u, 'current', `dfs(${u})`);\n  for (const v of G.neighbors(u)) {\n    if (seen.has(v)) continue;\n    G.edge(u, v, 'path', `Đi theo cạnh ${u} → ${v}`);\n    dfs(v);\n    G.visit(u, 'current', `Quay lại ${u}`);\n  }\n  G.visit(u, 'done', `Xong đỉnh ${u}`);\n}\ndfs(0);\nviz.log('Thứ tự duyệt:', order.join(' '));\n"
+  },
+  {
+   "id": "dijkstra",
+   "name": "Dijkstra (đường đi ngắn nhất có trọng số)",
+   "input": "0 1 4\n0 2 1\n2 1 2\n1 3 1\n2 3 5\n3 4 3",
+   "code": "const nums = readNumbers();\nconst edges = [];\nfor (let i = 0; i + 2 < nums.length; i += 3) edges.push([nums[i], nums[i + 1], nums[i + 2]]);\nconst G = viz.graph({ edges, name: 'G' });\nconst nodes = [...new Set(edges.flatMap(e => [e[0], e[1]]))];\nconst dist = {}; nodes.forEach(u => { dist[u] = Infinity; G.label(u, '∞'); });\ndist[0] = 0; G.label(0, 0);\nconst done = new Set(), par = {};\nwhile (done.size < nodes.length) {\n  let u = null;\n  for (const v of nodes) if (!done.has(v) && (u === null || dist[v] < dist[u])) u = v;\n  if (dist[u] === Infinity) break;\n  done.add(u);\n  G.visit(u, 'current', `Chọn đỉnh ${u} (dist = ${dist[u]})`);\n  for (const v of G.neighbors(u)) {\n    const w = G.weight(u, v);\n    G.edge(u, v, 'compare', `Xét cạnh ${u}–${v} (w = ${w})`);\n    if (dist[u] + w < dist[v]) {\n      if (par[v] !== undefined) G.edge(par[v], v, null, `Bỏ đường cũ tới ${v}`);\n      dist[v] = dist[u] + w; par[v] = u; G.label(v, dist[v]);\n      G.edge(u, v, 'path', `Cập nhật dist[${v}] = ${dist[v]}`);\n    } else G.edge(u, v, par[v] === u || par[u] === v ? 'path' : null, 'Không cải thiện');\n  }\n  G.visit(u, 'done');\n}\nviz.step('Cây đường đi ngắn nhất (cạnh cam) từ đỉnh 0');\n"
+  },
+  {
+   "id": "bst",
+   "name": "Cây nhị phân tìm kiếm (BST)",
+   "input": "50 30 70 20 40 60 80 35",
+   "code": "const T = viz.tree({ name: 'BST' });\nconst L = {}, R = {};\nlet root = null;\nfor (const x of readNumbers()) {\n  if (root === null) { root = x; T.addNode(x, `Gốc = ${x}`); continue; }\n  let cur = root;\n  while (true) {\n    T.highlight(cur, 'compare', `So sánh ${x} với ${cur}`);\n    const side = x < cur ? L : R;\n    if (side[cur] === undefined) { side[cur] = x; T.addEdge(cur, x, '', `Chèn ${x} vào ${x < cur ? 'trái' : 'phải'} của ${cur}`); break; }\n    cur = side[cur];\n  }\n}\n"
+  }
+ ],
+ "apiDoc": "## API mô phỏng (JavaScript)\n\nScript chạy **một lượt**, mọi thao tác được ghi lại thành từng bước để tua tới/lui.\n\n| Hàm | Ý nghĩa |\n|---|---|\n| `INPUT` | chuỗi \"Dữ liệu vào\" của khối |\n| `readNumbers()` | lấy mọi số trong INPUT thành mảng |\n| `viz.array(arr, {name, bars})` | mảng; `bars:true` để vẽ dạng cột |\n| `a.get(i)`, `a.length`, `a.values()` | đọc (không tạo bước) |\n| `a.set(i,x)`, `a.swap(i,j)`, `a.push(x)`, `a.pop()` | sửa (tạo 1 bước) |\n| `a.compare(i,j)` | tô màu so sánh, trả về -1/0/1 |\n| `a.highlight(i, state)` | tô tạm thời trong 1 bước |\n| `a.mark(i, state)`, `a.markRange(l,r,state)` | tô cố định (`null` để bỏ) |\n| `a.pointer('mid', i)` | mũi tên chỉ số (không tạo bước) |\n| `viz.grid(rows, cols, fill)` hoặc `viz.grid(mảng2D)` | lưới; `g.mark(r,c,state)`, `g.set(r,c,x)`, `g.state(r,c)`, `g.inside(r,c)` |\n| `viz.graph({nodes, edges:[[u,v,w]], directed})` | đồ thị; `G.visit(u,state)`, `G.edge(u,v,state)`, `G.neighbors(u)`, `G.weight(u,v)`, `G.label(u,text)`, `G.addNode`, `G.addEdge` |\n| `viz.tree({...})` | như graph nhưng vẽ dạng cây |\n| `viz.stack()`, `viz.queue()` | `push`, `pop`, `top`, `front`, `empty`, `size` |\n| `viz.var(tên, giá trị)` | hiện biến ở bảng biến |\n| `viz.log(...)` / `console.log(...)` | in ra khung log |\n| `viz.step('ghi chú')` | chụp một bước thủ công |\n| `viz.auto(false)` | tắt tự tạo bước, chỉ tạo khi gọi `viz.step` |\n\n**Trạng thái màu:** `compare`, `swap`, `active`, `current`, `done`, `sorted`, `found`, `visited`, `path`, `wall`, `start`, `end`, `frontier`, `dim` — hoặc mã màu như `'#ff0088'`.\n\nGiới hạn: tối đa 5000 bước, 4 giây chạy. Code chạy trong sandbox nên an toàn khi mở notebook người khác chia sẻ."
+}

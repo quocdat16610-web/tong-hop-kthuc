@@ -1,114 +1,76 @@
-# Sổ tay DSA C++
+# Sổ tay DSA C++ / Python
 
-Ứng dụng ghi chú để học Cấu trúc dữ liệu & Giải thuật bằng C++: tự tổng hợp video bài giảng tiếng Việt, viết ghi chú, lưu code, **tạo mô phỏng thuật toán bằng kéo thả (kiểu Scratch)** và **ra bài tập có chấm điểm như Codeforces**. Notebook có **nhánh, commit, merge** và **chia sẻ** như GitHub.
+Ứng dụng **chạy trực tiếp trên máy** (cửa sổ riêng trên Windows, app trên Android — không phải website) để học Cấu trúc dữ liệu & Giải thuật bằng C++ và **Python**:
 
-Chạy trên **Windows, macOS, Linux** (ứng dụng máy tính) và **Android** (file APK). Ghi chú do người dùng tự viết.
+- **Sổ tay**: mỗi trang chứa chung tiêu đề, ghi chú (Markdown), ảnh, video (file trên máy, link hoặc mã nhúng `<iframe>` YouTube / Google Drive, link .mp4 — phát ngay trong app, có mốc thời gian), code C++ / Python chạy được, mô phỏng thuật toán và bài tập. Cột **Mục lục** tự tạo từ các tiêu đề. Ghi chú do người dùng tự viết.
+- **Phiên bản như Git**: commit, lịch sử dạng đồ thị, nhánh, merge 3 chiều có giải quyết xung đột, chia sẻ notebook (file `.dsanote.json` hoặc link) để người khác mở thành bản riêng hoặc gộp vào như một nhánh.
+- **IDE C++ / Python** kiểu Code::Blocks / Thonny (nút **File Python mới**, mở/lưu file `.py`, lỗi cú pháp và traceback Python cũng bấm được để nhảy tới dòng): nhiều tab, mở file/thư mục, Build (Ctrl+F9), Build & Run (F9) với console tương tác, bấm vào lỗi để nhảy tới dòng, **gỡ lỗi từng dòng** bằng gdb (F8 bắt đầu/chạy tiếp, F7 dòng tiếp, Shift+F7 vào hàm, Ctrl+F7 ra khỏi hàm, F5 hoặc bấm lề trái để đặt điểm dừng), xem biến và ngăn xếp lời gọi.
+- **Bài tập & contest kiểu Codeforces**: tác giả viết đề, code chuẩn và trình sinh test — app tự tạo output đúng; người học nộp bài bằng **C++ hoặc Python** (chọn ngay trên ô bài làm, mỗi ngôn ngữ giữ bản nháp riêng; code chuẩn và trình sinh test cũng viết được bằng Python) và nhận Accepted / Wrong answer on test N / TLE / RE / CE. Contest có giờ thi và bảng xếp hạng ICPC.
+- **Bảng trắng vô hạn**: tab riêng (biểu tượng bút ở thanh bên trái, Alt+3; trên điện thoại ở thanh dưới) với nhiều bảng, và khối vẽ tay ngay trong trang để minh hoạ thuật toán. Bảng rộng vô hạn như bảng trắng của dân code: cuộn chuột / bàn di chuột hai ngón / công cụ bàn tay / kéo chuột phải hoặc chuột giữa để di chuyển, Ctrl + cuộn hoặc chụm hai ngón để phóng to – thu nhỏ (5%–800%), nút **Vừa khung** để xem toàn bộ hình vẽ. **Tự nắn hình** như Microsoft Whiteboard: vẽ tay đường thẳng, hình tròn / elip, chữ nhật, tam giác, hình thoi bị méo thì nhấc bút là thành hình chuẩn ngay (Ctrl+Z để giữ nét tay; bật/tắt bằng nút đũa thần). **Tải ảnh lên bảng**, công cụ **Chọn** để kéo, đổi cỡ, đưa xuống dưới, Delete để xoá — bút, bút dạ, đường thẳng, mũi tên, hình chữ nhật, hình tròn, chữ, tẩy, 8 màu, nền kẻ ô / chấm, hoàn tác / làm lại (Ctrl+Z / Ctrl+Y), lưu thành ảnh PNG, vẽ toàn màn hình (trên điện thoại chạm vào bảng để vẽ). Nét vẽ lưu dạng vector nên có lịch sử, commit, merge và chia sẻ như ghi chú.
+- **File đính kèm**: khối mới trong trang để tải lên một hay nhiều file bất kỳ (PDF, Word, Excel, ảnh, zip, code…); mở bằng app trên máy hoặc lưu / chia sẻ, và đi kèm khi chia sẻ / sao lưu notebook.
+- **Kéo thả file vào app** (Windows, macOS, Linux, Android chia đôi màn hình): thả ảnh / video / file bất kỳ vào trang sổ tay (ảnh → khối ảnh, video → khối video, file khác → File đính kèm), thả ảnh vào bảng trắng (đặt đúng chỗ thả), thả vào khối File đính kèm, thả file `.cpp` / `.py` vào IDE để mở, thả file `.dsanote.json` hoặc bản sao lưu ở bất cứ đâu để nhập notebook.
+- **Mô phỏng ghép khối kiểu Scratch**: kéo khối màu từ bảng 12 nhóm (Hiển thị, Dữ liệu vào, Điều khiển, Toán, Chữ, Biến, Danh sách, Mảng vẽ, Stack/Queue, Lưới, Đồ thị/Cây, Hàm) vào chương trình; thả khối giá trị vào ô; vòng lặp (kể cả `for (char c : s)`, `for (auto x : mảng)`, `for (int i = a; i < b; i++)`, `while`, `do … while`, `while (true)` như C++), nếu/không thì, biến, hàm có tham số và đệ quy. Có 8 mẫu (sắp xếp nổi bọt/chọn/chèn, tìm kiếm nhị phân, stack ngoặc, BFS lưới, DFS đệ quy, cây BST). Mô phỏng khối của bản cũ tự chuyển sang khối mới.
+- **Tự cập nhật từ GitHub**: app kiểm tra bản mới mỗi 5 phút và khi mở lại cửa sổ; Windows chỉ tải gói cập nhật nhẹ (không tải lại g++/gdb), tải song song 4 luồng, rồi cài khi bấm "Khởi động lại" hoặc khi đóng app, Android tải APK mới; **Thư viện bài tập** tự nhận nội dung mới mà tác giả đăng trong thư mục [`content/`](content/README.md) — ai chưa sửa thì cập nhật tự động, ai đã ghi chú thì được mời merge, không mất ghi chú.
+- **Thư viện code mẫu** (nút **Code mẫu** trong IDE và khối code): C++ — khung bài thi, DSU, Fenwick, cây phân đoạn, Sparse Table, BFS, DFS, Dijkstra, sắp xếp tô-pô, Kruskal, tìm kiếm nhị phân, hai con trỏ, LIS, cái túi, LCS, KMP, sàng nguyên tố, luỹ thừa nhanh, GCD/LCM; Python — khung bài thi đọc nhanh, BFS (deque), Dijkstra (heapq), DSU, bisect, sàng, LIS — tất cả đều được kiểm thử biên dịch / cú pháp.
+- **Tìm nhanh (Ctrl+K)** trong mọi notebook: trang, ghi chú, code, bài tập, video, bảng trắng — bấm kết quả để nhảy tới đúng chỗ.
+- **Tiến độ luyện tập**: mọi bài tập trong các notebook với trạng thái đã giải / đang làm / chưa làm và số lần nộp.
+- **Giao diện sáng / tối** (theo hệ thống hoặc chọn tay), menu kiểu ứng dụng Windows; trên điện thoại có thanh điều hướng dưới và mục lục dạng ngăn kéo.
 
-## Cài đặt (tải file chạy trực tiếp)
+## Tải về
 
-Vào trang **[Releases](https://github.com/quocdat16610-web/tong-hop-kthuc/releases)** của repo, mở bản **"Bản mới nhất"** và tải file:
+Vào **[Releases](https://github.com/quocdat16610-web/tong-hop-kthuc/releases)**, mở bản **"Bản mới nhất"**:
 
 | Máy | File | Ghi chú |
 |---|---|---|
-| Windows | `SoTayDSA-Setup-x.y.z.exe` | Bộ cài: bấm đúp để cài, app chạy trong cửa sổ riêng. **Có sẵn g++ và gdb** — chạy, chấm bài, gỡ lỗi không cần Internet. |
-| Windows (không cần cài) | `SoTayDSA-x.y.z-win-x64.zip` | Giải nén rồi bấm đúp `SoTayDSA.exe`. |
-| Android | `SoTayDSA-x.y.z-android.apk` | Mở file trên điện thoại để cài (cho phép "cài ứng dụng không rõ nguồn gốc"). Code C++ chạy online. |
-| Linux | `SoTayDSA-x.y.z-linux-x86_64.AppImage` | `chmod +x` rồi chạy. Cần `g++` (và `gdb` để gỡ lỗi). |
-| macOS | `SoTayDSA-x.y.z-mac-arm64.dmg` / `-x64.dmg` | Chưa ký: chuột phải → Open. Cần `xcode-select --install`. |
+| Windows | `SoTayDSA-Setup-x.y.z.exe` | Bộ cài, không cần quyền admin. **Có sẵn g++ 14, gdb và Python 3.12** — chạy code C++/Python, chấm bài, gỡ lỗi không cần Internet. |
+| Windows (không cần cài) | `SoTayDSA-x.y.z-win-x64-portable.zip` | Giải nén rồi bấm đúp `SoTayDSA.exe`. |
+| Android | `SoTayDSA-x.y.z-android.apk` | Bản cho điện thoại chip arm64 (gần như mọi máy hiện nay); máy đời cũ dùng `-android-armv7.apk`. Mở file trên điện thoại để cài (cho phép cài ứng dụng không rõ nguồn gốc). Code C++ và Python được chạy online qua Compiler Explorer nên cần Internet. |
 
-Mỗi lần có thay đổi mới, GitHub Actions tự build lại và cập nhật "Bản mới nhất". Muốn đánh số phiên bản cố định thì push tag dạng `v2.1.0`.
+Mỗi lần push, GitHub Actions build lại và cập nhật "Bản mới nhất". Push tag dạng `v3.1.0` để tạo bản phát hành có số phiên bản.
 
-### Chạy từ mã nguồn
+### Cập nhật không mất dữ liệu
+
+- Notebook, bài nộp và cài đặt được lưu trong thư mục dữ liệu của người dùng (Windows: `%APPDATA%`, Android: bộ nhớ riêng của app), **không** nằm trong thư mục cài app, nên cài bản mới / cập nhật tự động không đụng tới.
+- Trước mỗi lần tự cập nhật, app tự sao lưu toàn bộ dữ liệu (giữ 5 bản gần nhất). **Cài đặt → Sao lưu tất cả** để lưu ra file; **Notebook → Nhập** để khôi phục (không ghi đè dữ liệu đang có).
+- APK được ký bằng một khoá cố định (`app/android/app/sotaydsa-release.jks`) nên bản mới cài đè lên bản cũ. Bản APK 3.0.0 đầu tiên ký bằng khoá tạm, nên lần đầu chuyển sang bản mới cần **sao lưu → gỡ bản cũ → cài bản mới → nhập lại file sao lưu**.
+- Nội dung bài tập mới từ thư viện được gộp như một nhánh Git: ghi chú của bạn luôn được giữ.
+
+## Dùng nhanh
+
+1. Mở app → **Sổ hướng dẫn** để xem ví dụ đủ các loại khối, hoặc **Notebook mới**.
+2. Bấm **+** giữa các khối hoặc thanh **Thêm khối** cuối trang để chèn tiêu đề, văn bản, ảnh, video, code, mô phỏng, bài tập.
+3. **Ctrl+S** (hoặc nút ✓ trên điện thoại) để commit. Menu **Phiên bản** có Lịch sử, Nhánh, Merge.
+4. **Notebook → Chia sẻ** để lưu file `.dsanote.json` / tạo link; người nhận dùng **Nhập**.
+5. **Alt+2** (hoặc biểu tượng `</>`) để sang IDE; nút **Mở trong IDE** trên khối code và **Đưa vào sổ tay** trong IDE để chuyển code qua lại.
+
+6. **Mô phỏng**: thêm khối **Mô phỏng** → **Sửa** → kéo khối từ bảng bên trái vào chương trình (bấm vào khối để thêm vào cuối), kéo khối về bảng để xoá, chuột phải để nhân bản; **Toàn màn hình** để có chỗ ghép rộng. Muốn viết tay thì chuyển sang **Code JS**.
+7. **Notebook → Thư viện bài tập (GitHub)** để tải và tự nhận bài tập mới; **Notebook → Kiểm tra cập nhật** để cập nhật app.
+
+Khối kéo thả được dịch sang JavaScript (thư viện `viz`) và chạy bằng engine QuickJS tích hợp, vẽ bằng giao diện gốc của app.
+
+## Mã nguồn
+
+```
+app/            Ứng dụng Flutter (Dart) — Windows, Android (và Linux/macOS khi build từ nguồn)
+  lib/core/     VCS (commit/nhánh/merge), chấm bài, chạy g++ / online, gdb MI, lưu trữ, mô phỏng
+  lib/ui/       Giao diện: khung app, sổ tay, khối nội dung, IDE, hộp thoại Git, contest
+  test/         Kiểm thử (merge, chấm bài, chạy tương tác, gỡ lỗi gdb…)
+  windows/installer/  Script Inno Setup tạo bộ cài .exe
+  tool/build_library.py  Gom content/*.dsanote.json thành thư viện noi-dung.json (CI chạy)
+content/        Notebook đăng cho mọi người dùng (thư viện bài tập)
+assets-src/     Biểu tượng app
+legacy-html/    Bản cũ (Electron + HTML), giữ để tham khảo; dữ liệu và link chia sẻ của bản cũ vẫn nhập được
+```
+
+Chạy từ nguồn (cần [Flutter](https://docs.flutter.dev/get-started/install) 3.47+):
 
 ```bash
-npm install
-npm start            # mở ứng dụng (Electron)
-npm test             # kiểm thử
+cd app
+flutter pub get
+flutter run -d windows     # hoặc: -d linux, hoặc cắm điện thoại Android
+flutter test               # kiểm thử (cần g++ và gdb trong PATH để chạy đủ)
 ```
 
-## Dùng thế nào
+Python được tìm theo thứ tự: đường dẫn trong Cài đặt → thư mục `python` cạnh file exe → `python3` / `python` trong `PATH` → các vị trí cài Python 3.10–3.13 phổ biến; không có thì chạy online.
 
-**Một trang chứa được mọi thứ.** Mỗi trang gồm các khối, chèn bằng nút **+** giữa các khối hoặc thanh *Thêm khối* cuối trang:
-
-| Khối | Dùng để |
-|---|---|
-| Tiêu đề | Tạo mục; cột **Mục lục** bên trái tự cập nhật (cả các dòng `#`, `##` trong văn bản). |
-| Văn bản | Ghi chú Markdown; dán ảnh trực tiếp bằng Ctrl+V. |
-| Ảnh | Chọn ảnh từ máy, dán link, hoặc kéo thả file vào trang. |
-| Video | Link YouTube / playlist / Google Drive / Facebook / TikTok / Vimeo / Dailymotion phát **ngay trong app**; hoặc file video từ máy. Thêm mốc thời gian để nhảy tới đoạn cần xem. |
-| Code C++ | Soạn code có tô màu, nhập stdin, bấm **Chạy**. |
-| Mô phỏng kéo thả | Ghép khối như Scratch: mảng, stack/queue, lưới, đồ thị, cây… rồi xem thuật toán chạy từng bước. |
-| Mô phỏng bằng code | Như trên nhưng viết bằng JavaScript (thư viện `viz`, có mẫu sẵn). |
-| Bài tập | Đề bài + test + code chuẩn. Người học nộp bài và được chấm. |
-
-Nút **sáng/tối** (biểu tượng mặt trăng / mặt trời) trên thanh công cụ đổi nền trắng ↔ tối.
-
-### IDE C++ (giống Code::Blocks / Thonny)
-
-Bấm **IDE C++** trên thanh công cụ để chuyển sang chế độ lập trình:
-
-- **Nhiều tab** như trình duyệt: mỗi file một tab, chấm ● là chưa lưu; trên điện thoại kéo ngang để đổi tab.
-- **Mở file / mở thư mục thật** trên máy (cây thư mục bên trái), `#include "file.h"` trong cùng thư mục dùng được. Trên Android, file được lưu trong app và có thể xuất ra để gửi.
-- **Build và chạy** với phím tắt giống Code::Blocks. Chương trình chạy trong **Console**: gõ input trực tiếp khi chương trình đang chờ `cin`.
-- **Thông báo build**: liệt kê lỗi/cảnh báo, bấm để nhảy tới đúng dòng; dòng lỗi được tô đỏ.
-- **Gỡ lỗi từng dòng** (bản máy tính, dùng gdb): bấm lề trái để đặt điểm dừng, xem **biến** và **ngăn xếp gọi** ở bảng bên phải như Thonny. Input khi gỡ lỗi lấy từ tab *Input*.
-- **Đưa vào sổ tay**: chèn code đang mở thành khối Code trong trang; ngược lại khối Code trong sổ tay có nút *Mở trong IDE*.
-
-| Phím | Việc |
-|---|---|
-| F9 | Build và chạy |
-| Ctrl+F9 / Ctrl+F10 | Build / Chạy |
-| F8 | Bắt đầu gỡ lỗi / chạy tới điểm dừng kế |
-| F7 · Shift+F7 · Ctrl+F7 | Dòng kế · Vào hàm · Ra khỏi hàm |
-| Shift+F8 | Dừng |
-| F5 | Đặt / bỏ điểm dừng ở dòng con trỏ |
-| Ctrl+N · Ctrl+O · Ctrl+S · Ctrl+W | Tab mới · Mở file · Lưu · Đóng tab |
-
-> IDE được viết lại bên trong app theo cách dùng của Code::Blocks và Thonny (không nhúng trực tiếp mã nguồn hai phần mềm đó, vì Code::Blocks viết bằng C++/wxWidgets và Thonny viết bằng Python/Tkinter — không chạy được bên trong ứng dụng này). Phần gỡ lỗi dùng gdb giống Code::Blocks.
-
-### Bài tập và contest (giống Codeforces)
-
-1. Chèn khối **Bài tập**, bấm **Sửa** (⋮ → Sửa):
-   - *Đề bài*: tên, giới hạn thời gian/bộ nhớ, cách so output, nội dung đề.
-   - *Code chuẩn*: lời giải đúng của tác giả.
-   - *Test*: nhập input, bấm **Tạo output bằng code chuẩn**. Đánh dấu vài test là *test mẫu* để hiện trong đề.
-   - *Sinh test*: viết generator C++ in ra input ngẫu nhiên từ seed; app chạy generator rồi code chuẩn để **tự tạo hàng loạt test**.
-2. Người học dán code vào ô *Bài làm*, bấm **Nộp bài** → kết quả `Accepted`, `Wrong answer on test N`, `Time limit exceeded`, `Runtime error`, `Compilation error`. Test ẩn không bị lộ dữ liệu.
-3. Nút **Contest** → tạo kỳ thi từ các bài (A, B, C…) với thời gian làm bài. Thí sinh bấm **Bắt đầu làm bài**; bảng xếp hạng theo luật ICPC (số bài giải, rồi thời gian + 20 phút mỗi lần sai).
-4. **Xuất đề cho thí sinh** tạo file đề *không kèm code chuẩn*. Thí sinh làm xong bấm **Xuất kết quả** gửi lại; người ra đề bấm **Nhập kết quả** để có bảng xếp hạng chung.
-
-Chấm bài: bản máy tính dùng **g++ trên máy** (Windows có sẵn trong bộ cài; có thể chọn g++ khác trong *Cài đặt*). Android dùng [Compiler Explorer](https://godbolt.org) online.
-
-### Nhánh, lịch sử, chia sẻ
-
-- **Commit** (Ctrl+S) lưu một phiên bản. **Lịch sử** xem đồ thị commit, so sánh, khôi phục.
-- **Nhánh**: tạo nhánh để thử cách ghi chú khác; **Merge** gộp lại, có màn hình giải quyết xung đột.
-- **Chia sẻ**: lưu file `.dsanote.json` (kèm ảnh/video) hoặc tạo link dạng `sotaydsa://share/…` — bấm link sẽ mở thẳng app (nếu ứng dụng chat không cho bấm, dán link vào nút **Nhập**). Trên Android mở bảng chia sẻ (Zalo, Messenger, Drive…).
-- **Nhập**: mở thành notebook riêng (*fork*), hoặc gộp vào notebook có sẵn — nhánh của người gửi hiện dạng `tên/nhánh` để xem và merge.
-
-## Cấu trúc mã nguồn
-
-```
-index.html, css/        giao diện
-js/vcs.js               commit, nhánh, diff, merge 3 chiều, fork/fetch
-js/judge.js             chấm bài, so output, bảng xếp hạng ICPC, backend online
-js/sim.js               chạy mô phỏng trong iframe sandbox + Web Worker (giới hạn thời gian)
-js/blocks.js            khối kéo thả (Blockly) sinh code cho mô phỏng
-js/contest.js           khối bài tập, sinh test, contest
-js/ide.js               chế độ IDE: tab, build/chạy, console, gỡ lỗi
-js/ui.js, js/app.js     giao diện
-js/services.js          lưu trữ IndexedDB, ảnh/video, chia sẻ, chọn nơi chạy code
-electron/               ứng dụng máy tính: chấm bài bằng g++, file, console, gỡ lỗi gdb (mi.js, ide.js)
-android/                dự án Android (Capacitor)
-.github/workflows/      đóng gói Windows / macOS / Linux / Android
-vendor/                 thư viện đi kèm (marked, DOMPurify, highlight.js, CodeMirror, Blockly)
-```
-
-## Giới hạn
-
-- Dữ liệu lưu trên từng máy; cộng tác bằng cách gửi file/link cho nhau (không có máy chủ đồng bộ). Hãy xuất file để sao lưu.
-- Giới hạn bộ nhớ trong đề chỉ để hiển thị, chưa được kiểm tra khi chấm.
-- Dữ liệu test nằm trong file đề, nên người rành kỹ thuật vẫn đọc được — phù hợp luyện tập/thi trong lớp, không chống gian lận tuyệt đối.
-- Android cần Internet để chạy C++ (chấm online chậm hơn: mỗi test là một lượt gửi lên Compiler Explorer); chưa có gỡ lỗi từng dòng và console tương tác trên Android.
-- Khi gỡ lỗi, output hiện sau mỗi bước nếu chương trình không tắt đồng bộ (`ios::sync_with_stdio(false)`).
-- Code mô phỏng chạy trong sandbox nên mở notebook người khác gửi vẫn an toàn; code C++ chỉ chạy khi bạn bấm.
+Trên Windows khi chạy từ nguồn, app tìm `g++` theo thứ tự: đường dẫn trong Cài đặt → `mingw64\bin` cạnh file exe → `PATH` → MSYS2 / Dev-C++ / Code::Blocks / các vị trí cài phổ biến.

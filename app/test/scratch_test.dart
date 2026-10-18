@@ -1,0 +1,199 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:so_tay_dsa/core/scratch.dart';
+import 'package:so_tay_dsa/core/scratch_templates.dart';
+import 'package:so_tay_dsa/core/vcs.dart' show Json;
+
+// Chạy code sinh ra bằng Node (nếu có) với thư viện viz thật để chắc chắn mẫu chạy đúng.
+Map<String, dynamic>? runNode(String code, String input) {
+  final node = Process.runSync('node', ['--version']);
+  if (node.exitCode != 0) return null;
+  final dir = Directory.systemTemp.createTempSync('scratch');
+  final f = File('${dir.path}/run.js')
+    ..writeAsStringSync('${File('assets/sim_runtime.js').readAsStringSync(encoding: utf8)}\nprocess.stdout.write(__runSim(${jsonEncode(code)}, ${jsonEncode(input)}));');
+  final r = Process.runSync('node', [f.path], stdoutEncoding: utf8, stderrEncoding: utf8);
+  dir.deleteSync(recursive: true);
+  return jsonDecode(r.stdout as String) as Map<String, dynamic>;
+}
+
+bool get hasNode {
+  try {
+    return Process.runSync('node', ['--version']).exitCode == 0;
+  } catch (_) {
+    return false;
+  }
+}
+
+void main() {
+  test('tên biến tiếng Việt thành tên JS hợp lệ', () {
+    expect(jsName('v_', 'i'), 'v_i');
+    expect(jsName('v_', 'đếm'), isNot(contains('đ')));
+    expect(jsName('v_', 'đếm'), isNot(jsName('v_', 'dem')));
+  });
+
+  for (final t in blockTemplates) {
+    test('mẫu khối "${t.name}" sinh code chạy được', () {
+      final code = generateJs(t.program());
+      final r = runNode(code, t.input)!;
+      expect(r['error'], isNull, reason: code);
+      expect((r['frames'] as List).length, greaterThan(3));
+    }, skip: !hasNode);
+  }
+
+  test('kết quả đúng: sắp xếp, tìm kiếm nhị phân, ngoặc, BFS, DFS', () {
+    String lastNote(String id, String input) {
+      final t = blockTemplates.firstWhere((x) => x.id == id);
+      final r = runNode(generateJs(t.program()), input)!;
+      expect(r['error'], isNull);
+      return ((r['frames'] as List).last as Map)['note'] as String;
+    }
+
+    final bubble = runNode(generateJs(blockTemplates.first.program()), '5 1 4 2 8 3')!;
+    final arr = (((bubble['frames'] as List).last as Map)['s'] as List).first as Map;
+    expect(arr['v'], [1, 2, 3, 4, 5, 8]);
+    expect(lastNote('k-binary', '1 3 5 7 9 11 13\n11'), contains('vị trí 5'));
+    expect(lastNote('k-brackets', '({[]})'), 'Dãy ngoặc ĐÚNG');
+    expect(lastNote('k-brackets', '(]'), 'Dãy ngoặc SAI');
+    expect(lastNote('k-bfs', 'S.#\n..E'), 'Đến đích sau 3 bước');
+    expect(lastNote('k-dfs', '1 2 1 3 2 4'), 'Thứ tự thăm: 1 2 4 3');
+  }, skip: !hasNode);
+
+  test('vòng for kiểu C++: for (char c : s), for (auto x : mảng), for (i = a; i < b; i++)', () {
+    final prog = {
+      'v': 2,
+      'vars': <dynamic>['c', 'dem', 'a', 'x', 'tong', 'i', 'k'],
+      'funcs': <dynamic>[],
+      'main': <dynamic>[
+        newNode('var_set', a: {'VAR': 'dem', 'X': '0'}),
+        newNode('foreach_text', a: {'VAR': 'c', 'T': 'banana'})
+          ..['do'] = [
+            newNode('if', a: {'COND': newNode('compare', a: {'A': newNode('var_get', a: {'VAR': 'c'}), 'OP': '==', 'B': 'a'})})
+              ..['do'] = [newNode('var_change', a: {'VAR': 'dem', 'X': '1'})],
+          ],
+        newNode('array_create', a: {'VAR': 'a', 'LIST': '4 8 15'}),
+        newNode('var_set', a: {'VAR': 'tong', 'X': '0'}),
+        newNode('foreach_array', a: {'VAR': 'x', 'ARR': 'a'})..['do'] = [newNode('var_change', a: {'VAR': 'tong', 'X': newNode('var_get', a: {'VAR': 'x'})})],
+        newNode('var_set', a: {'VAR': 'k', 'X': '0'}),
+        newNode('for_lt', a: {'VAR': 'i', 'FROM': '2', 'TO': '5'})..['do'] = [newNode('var_change', a: {'VAR': 'k', 'X': newNode('var_get', a: {'VAR': 'i'})})],
+        newNode('step', a: {'X': newNode('js_expr', a: {'CODE': '"dem=" + v_dem + " tong=" + v_tong + " k=" + v_k'})}),
+      ],
+    };
+    final code = generateJs(prog);
+    expect(code, contains('for (v_c of String('));
+    if (!hasNode) return;
+    final r = runNode(code, '')!;
+    expect(r['error'], isNull, reason: code);
+    // banana có 3 chữ a; 4+8+15 = 27; 2+3+4 = 9
+    expect(((r['frames'] as List).last as Map)['note'], 'dem=3 tong=27 k=9');
+  });
+
+  test('vòng while, do-while, while (true) + break', () {
+    Json v(String n) => newNode('var_get', a: {'VAR': n});
+    final prog = {
+      'v': 2,
+      'vars': <dynamic>['n', 'dem', 'k', 'm'],
+      'funcs': <dynamic>[],
+      'main': <dynamic>[
+        // while (n > 1) { n = n / 2; dem++ }  với n = 64 → dem = 6
+        newNode('var_set', a: {'VAR': 'n', 'X': '64'}),
+        newNode('var_set', a: {'VAR': 'dem', 'X': '0'}),
+        newNode('while', a: {'COND': newNode('compare', a: {'A': v('n'), 'OP': '>', 'B': '1'})})
+          ..['do'] = [
+            newNode('var_set', a: {'VAR': 'n', 'X': newNode('idiv', a: {'A': v('n'), 'B': '2'})}),
+            newNode('var_change', a: {'VAR': 'dem', 'X': '1'}),
+          ],
+        // do { k++ } while (false) → k = 1
+        newNode('var_set', a: {'VAR': 'k', 'X': '0'}),
+        newNode('do_while', a: {'COND': newNode('bool', a: {'V': 'false'})})..['do'] = [newNode('var_change', a: {'VAR': 'k', 'X': '1'})],
+        // while (true) { m++; if (m == 5) break; } → m = 5
+        newNode('var_set', a: {'VAR': 'm', 'X': '0'}),
+        newNode('while_true')
+          ..['do'] = [
+            newNode('var_change', a: {'VAR': 'm', 'X': '1'}),
+            newNode('if', a: {'COND': newNode('compare', a: {'A': v('m'), 'OP': '==', 'B': '5'})})..['do'] = [newNode('break')],
+          ],
+        newNode('step', a: {'X': newNode('js_expr', a: {'CODE': '"dem=" + v_dem + " k=" + v_k + " m=" + v_m'})}),
+      ],
+    };
+    final code = generateJs(prog);
+    if (!hasNode) return;
+    final r = runNode(code, '')!;
+    expect(r['error'], isNull, reason: code);
+    expect(((r['frames'] as List).last as Map)['note'], 'dem=6 k=1 m=5');
+  });
+
+  test('chuyển khối Blockly của bản cũ', () {
+    final legacy = {
+      'blocks': {
+        'languageVersion': 0,
+        'blocks': [
+          {
+            'type': 'dsa_array_create',
+            'x': 20,
+            'y': 20,
+            'fields': {'VAR': {'id': 'A'}, 'STYLE': 'bars'},
+            'inputs': {'LIST': {'block': {'type': 'dsa_read_numbers'}}},
+            'next': {
+              'block': {
+                'type': 'controls_for',
+                'fields': {'VAR': {'id': 'I'}},
+                'inputs': {
+                  'FROM': {'shadow': {'type': 'math_number', 'fields': {'NUM': 0}}},
+                  'TO': {
+                    'shadow': {'type': 'math_number', 'fields': {'NUM': 9}},
+                    'block': {
+                      'type': 'math_arithmetic',
+                      'fields': {'OP': 'MINUS'},
+                      'inputs': {
+                        'A': {'block': {'type': 'dsa_array_length', 'fields': {'VAR': {'id': 'A'}}}},
+                        'B': {'shadow': {'type': 'math_number', 'fields': {'NUM': 1}}},
+                      },
+                    },
+                  },
+                  'BY': {'shadow': {'type': 'math_number', 'fields': {'NUM': 1}}},
+                  'DO': {
+                    'block': {
+                      'type': 'controls_if',
+                      'extraState': {'hasElse': true},
+                      'inputs': {
+                        'IF0': {
+                          'block': {
+                            'type': 'logic_compare',
+                            'fields': {'OP': 'GT'},
+                            'inputs': {
+                              'A': {'block': {'type': 'dsa_array_get', 'fields': {'VAR': {'id': 'A'}}, 'inputs': {'I': {'block': {'type': 'variables_get', 'fields': {'VAR': {'id': 'I'}}}}}}},
+                              'B': {'shadow': {'type': 'math_number', 'fields': {'NUM': 3}}},
+                            },
+                          },
+                        },
+                        'DO0': {'block': {'type': 'dsa_array_mark', 'fields': {'VAR': {'id': 'A'}, 'COLOR': 'done'}, 'inputs': {'I': {'block': {'type': 'variables_get', 'fields': {'VAR': {'id': 'I'}}}}}}},
+                        'ELSE': {'block': {'type': 'dsa_array_mark', 'fields': {'VAR': {'id': 'A'}, 'COLOR': 'dim'}, 'inputs': {'I': {'block': {'type': 'variables_get', 'fields': {'VAR': {'id': 'I'}}}}}}},
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        ],
+      },
+      'variables': [
+        {'name': 'a', 'id': 'A'},
+        {'name': 'i', 'id': 'I'},
+      ],
+    };
+    final prog = fromBlockly(legacy);
+    final main = prog['main'] as List;
+    expect(main.length, 2);
+    expect((main[1] as Map)['op'], 'for');
+    expect(((main[1] as Map)['do'] as List).first['op'], 'ifelse');
+    if (hasNode) {
+      final r = runNode(generateJs(prog), '1 5 2 7')!;
+      expect(r['error'], isNull);
+      final arr = (((r['frames'] as List).last as Map)['s'] as List).first as Map;
+      expect(arr['st'], {'0': 'dim', '1': 'done', '2': 'dim', '3': 'done'});
+    }
+  });
+}
