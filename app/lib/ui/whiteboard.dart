@@ -1,7 +1,9 @@
 // Bảng trắng vô hạn: vẽ tay, đường thẳng, mũi tên, hình chữ nhật, hình tròn, chữ, ảnh, tẩy, hoàn tác.
 // Kéo bằng công cụ bàn tay / chuột phải / chuột giữa / hai ngón để di chuyển, cuộn hoặc chụm ngón để phóng to.
 // Bút có "tự nắn hình": vẽ tay đường thẳng / hình tròn / chữ nhật / tam giác méo sẽ được thay bằng hình chuẩn ngay khi nhấc bút.
+// Viết tay chữ số (0–9, nhiều chữ số) thì sau khi ngừng viết một chút được thay bằng chữ in cùng cỡ, cùng chỗ.
 // Nét vẽ lưu dạng vector trong notebook (nên có lịch sử, commit, merge, chia sẻ như nội dung khác).
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -13,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../app_state.dart';
+import '../core/digits.dart';
 import '../core/shapes.dart';
 import '../core/storage.dart';
 import '../core/vcs.dart' show Json;
@@ -103,13 +106,16 @@ List<Offset> _pts(Map s) {
 
 double _w(Map s) => ((s['w'] ?? 3) as num).toDouble();
 
+/// Cỡ chữ: theo độ dày nét, hoặc lưu sẵn ("fs") với chữ số nhận dạng từ nét viết tay.
+double _fs(Map s) => (s['fs'] as num?)?.toDouble() ?? 10 + _w(s) * 4;
+
 _Geo _makeGeo(Map s) {
   final p = _pts(s);
   if (p.isEmpty) return _Geo(p, Rect.zero);
   final w = _w(s);
   if (s['t'] == 'text') {
     final lines = '${s['text'] ?? ''}'.split('\n');
-    final fs = 10 + w * 4;
+    final fs = _fs(s);
     return _Geo(p, Rect.fromLTWH(p.first.dx, p.first.dy, lines.map((l) => l.length).fold(1, math.max) * fs * .62, lines.length * fs * 1.3));
   }
   var l = p.first.dx, t = p.first.dy, r = l, btm = t;
@@ -226,7 +232,7 @@ void _drawStroke(Canvas c, Map s, _Geo g) {
       final tp = TextPainter(
         text: TextSpan(
           text: '${s['text'] ?? ''}',
-          style: TextStyle(color: color, fontSize: 10 + w * 4, fontWeight: FontWeight.w500),
+          style: TextStyle(color: color, fontSize: _fs(s), fontWeight: FontWeight.w500),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
@@ -420,9 +426,17 @@ class _WhiteboardState extends State<Whiteboard> {
   List get list => _strokes(b);
 
   bool get _autoShape => context.read<AppState>().setting('boardShapes', true);
+  bool get _autoDigits => context.read<AppState>().setting('boardDigits', true);
+
+  // Nhận dạng chữ số: nét bút cỡ chữ viết tay được giữ lại một chút, chờ xem còn nét tiếp theo
+  // (chữ số nhiều nét như 4, 5, 7 hay số nhiều chữ số), rồi mới đoán và thay bằng chữ in.
+  final List<Map> _ink = [];
+  Timer? _inkTimer;
+  static const _inkDelay = Duration(milliseconds: 650);
 
   @override
   void dispose() {
+    _inkTimer?.cancel();
     _focus.dispose();
     super.dispose();
   }
@@ -448,6 +462,7 @@ class _WhiteboardState extends State<Whiteboard> {
   }
 
   void _undoAct() {
+    _dropInk();
     if (_undo.isEmpty && list.isEmpty) return;
     _redo.add(List.of(list));
     if (_undo.isNotEmpty) {
@@ -463,6 +478,7 @@ class _WhiteboardState extends State<Whiteboard> {
   }
 
   void _redoAct() {
+    _dropInk();
     if (_redo.isEmpty) return;
     _undo.add(List.of(list));
     final next = _redo.removeLast();
@@ -547,6 +563,11 @@ class _WhiteboardState extends State<Whiteboard> {
 
   // ---------- Vẽ ----------
   void _start(Offset p) {
+    if (tool == Tool.pen) {
+      _inkTimer?.cancel(); // đang viết tiếp → chờ nét này xong rồi mới đoán
+    } else {
+      _flushInk();
+    }
     if (tool == Tool.eraser) {
       _erasing = false;
       _erase(p);
@@ -591,17 +612,91 @@ class _WhiteboardState extends State<Whiteboard> {
     final s = live;
     if (s == null) return;
     live = null;
+    final pts = (s['p'] as List).cast<num>();
+    final shape = s['t'] == 'pen' && _autoShape ? recognizeShape(pts) : null;
+    if (s['t'] == 'pen' && _autoDigits) {
+      final r = _geo(s).bounds;
+      // Nét cỡ chữ viết tay (không phải hình khép kín rõ ràng) → giữ lại chờ đoán chữ số.
+      final small = r.height * zoom <= 160 && r.width * zoom <= 160 && r.longestSide * zoom >= 6;
+      if (small && (shape == null || shape.t == 'line' || shape.t == 'ellipse')) {
+        if (_ink.isNotEmpty && !_nearInk(r)) _flushInk();
+        _checkpoint();
+        list.add(s);
+        _ink.add(s);
+        _inkTimer?.cancel();
+        _inkTimer = Timer(_inkDelay, _flushInk);
+        _commit();
+        return;
+      }
+    }
+    _flushInk();
     _checkpoint();
     list.add(s);
     // Tự nắn hình: thay nét tay bằng hình chuẩn ngay khi nhấc bút (Hoàn tác một lần sẽ trả lại nét tay).
-    if (s['t'] == 'pen' && _autoShape) {
-      final shape = recognizeShape((s['p'] as List).cast<num>());
-      if (shape != null) {
-        _checkpoint();
-        list[list.length - 1] = {'t': shape.t, 'c': s['c'], 'w': s['w'], 'p': shape.p};
-      }
+    if (shape != null) {
+      _checkpoint();
+      list[list.length - 1] = {'t': shape.t, 'c': s['c'], 'w': s['w'], 'p': shape.p};
     }
     _commit();
+  }
+
+  /// Nét mới có nằm cạnh nhóm nét đang chờ không (cùng dòng, cách nhau không quá một chữ).
+  bool _nearInk(Rect r) {
+    final g = _ink.map((s) => _geo(s).bounds).reduce((a, b) => a.expandToInclude(b));
+    final h = math.max(g.height, r.height);
+    final gapX = math.max(0.0, math.max(r.left - g.right, g.left - r.right));
+    final sameLine = r.top < g.bottom + 0.3 * h && r.bottom > g.top - 0.3 * h;
+    return sameLine && gapX < 0.9 * h;
+  }
+
+  /// Bỏ nhóm đang chờ mà không đoán (khi hoàn tác / làm lại).
+  void _dropInk() {
+    _inkTimer?.cancel();
+    _inkTimer = null;
+    _ink.clear();
+  }
+
+  /// Đoán nhóm nét đang chờ: là số thì thay bằng chữ in cùng cỡ, chỗ; không thì nắn hình từng nét như thường.
+  void _flushInk() {
+    _inkTimer?.cancel();
+    _inkTimer = null;
+    if (_ink.isEmpty || !mounted) return;
+    final group = List.of(_ink);
+    _ink.clear();
+    if (!group.every((g) => list.any((x) => identical(x, g)))) return; // đã bị tẩy / xoá
+    final strokes = [for (final g in group) (g['p'] as List).cast<num>()];
+    var found = recognizeNumber(strokes);
+    // Một nét thẳng đứng đứng riêng: chỉ coi là "1" nếu nhỏ cỡ chữ, dài hơn thì là đoạn thẳng.
+    if (found != null && found.text == '1' && group.length == 1 && (found.box[3] - found.box[1]) * zoom > 70) found = null;
+    if (found != null) {
+      _checkpoint();
+      final at = list.indexWhere((x) => identical(x, group.first));
+      list.removeWhere((x) => group.any((g) => identical(g, x)));
+      final fs = ((found.box[3] - found.box[1]) / .71).clamp(6.0, 600.0);
+      list.insert(at.clamp(0, list.length), {
+        't': 'text',
+        'c': group.first['c'],
+        'w': group.first['w'],
+        'fs': _r(fs),
+        'p': [_r(found.box[0]), _r(found.box[1] - .22 * fs)],
+        'text': found.text,
+      });
+      _sel = null;
+      _commit();
+      return;
+    }
+    if (!_autoShape) return;
+    var changed = false;
+    for (final g in group) {
+      final shape = recognizeShape((g['p'] as List).cast<num>());
+      if (shape == null) continue;
+      if (!changed) {
+        _checkpoint();
+        changed = true;
+      }
+      list[list.indexWhere((x) => identical(x, g))] = {'t': shape.t, 'c': g['c'], 'w': g['w'], 'p': shape.p};
+    }
+    if (changed) _commit();
   }
 
   void _erase(Offset p) {
@@ -787,6 +882,7 @@ class _WhiteboardState extends State<Whiteboard> {
   Widget _toolbar() {
     final sel = context.cs.primaryContainer;
     final auto = context.select<AppState, bool>((a) => a.setting('boardShapes', true));
+    final digits = context.select<AppState, bool>((a) => a.setting('boardDigits', true));
     Widget toolBtn(Tool t) => IconButton(
       tooltip: _toolInfo[t]!.$2,
       visualDensity: VisualDensity.compact,
@@ -812,6 +908,14 @@ class _WhiteboardState extends State<Whiteboard> {
           style: IconButton.styleFrom(backgroundColor: auto ? sel : null),
           icon: Icon(auto ? Icons.auto_fix_high : Icons.auto_fix_off, size: 20),
           onPressed: () => context.read<AppState>().setSetting('boardShapes', !auto),
+        ),
+        IconButton(
+          tooltip: digits ? 'Nhận dạng chữ số: BẬT — viết tay số (0–9, nhiều chữ số) sẽ thành chữ in sau khi ngừng viết một chút (Hoàn tác để giữ nét tay)' : 'Nhận dạng chữ số: TẮT',
+          visualDensity: VisualDensity.compact,
+          isSelected: digits,
+          style: IconButton.styleFrom(backgroundColor: digits ? sel : null),
+          icon: const Icon(Icons.onetwothree, size: 22),
+          onPressed: () => context.read<AppState>().setSetting('boardDigits', !digits),
         ),
         IconButton(tooltip: 'Tải ảnh từ máy lên bảng', visualDensity: VisualDensity.compact, icon: const Icon(Icons.add_photo_alternate_outlined, size: 20), onPressed: _insertImage),
         sep(),

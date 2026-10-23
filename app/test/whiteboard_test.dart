@@ -13,6 +13,8 @@ import 'package:so_tay_dsa/core/storage.dart';
 import 'package:so_tay_dsa/ui/drop.dart';
 import 'package:so_tay_dsa/ui/whiteboard.dart';
 
+import 'digit_samples.dart' as samples;
+
 void main() {
   setUpAll(() async {
     await Storage.init(override: Directory.systemTemp.createTempSync('sotay-board'));
@@ -135,5 +137,39 @@ void main() {
     expect(DropItemFile(r'C:\Users\a\Desktop\bai tap.pdf').fileName, 'bai tap.pdf');
     expect(DropItemFile('/home/a/anh.png').fileName, 'anh.png');
     expect(DropItemFile(r'D:\tmp/sotay-drop/bai.pdf').fileName, 'bai.pdf');
+  });
+
+  testWidgets('viết tay số "12" → thành chữ in sau khi ngừng viết; Hoàn tác trả lại nét tay', (t) async {
+    final block = await pump(t);
+    final c = t.getRect(find.byType(Listener).last).center;
+    final r = math.Random(2);
+    final strokes = block['strokes'] as List;
+    for (final (digit, dx) in [('1', 0.0), ('2', 45.0)]) {
+      for (final s in samples.ink(samples.hand[digit]![0], r, at: (c.dx + dx, c.dy))) {
+        await drawPath(t, [for (var i = 0; i + 1 < s.length; i += 2) Offset(s[i].toDouble(), s[i + 1].toDouble())]);
+      }
+      await t.pump(const Duration(milliseconds: 200)); // viết chữ tiếp theo trước khi hết thời gian chờ
+    }
+    expect(strokes.every((s) => (s as Map)['t'] == 'pen'), isTrue, reason: 'chưa ngừng viết thì vẫn là nét tay');
+    await t.pump(const Duration(milliseconds: 700));
+    expect(strokes, hasLength(1));
+    final text = strokes.single as Map;
+    expect(text['t'], 'text');
+    expect(text['text'], '12');
+    expect((text['fs'] as num) * .71, closeTo(50, 8)); // chữ in cao bằng chữ viết tay
+
+    await t.tap(find.byIcon(Icons.undo));
+    await t.pump();
+    expect(strokes.length, greaterThanOrEqualTo(2));
+    expect(strokes.every((s) => (s as Map)['t'] == 'pen'), isTrue);
+  });
+
+  testWidgets('vòng tròn nhỏ (cỡ chữ) vẫn thành hình tròn, không thành số 0', (t) async {
+    final block = await pump(t);
+    final c = t.getRect(find.byType(Listener).last).center;
+    await drawPath(t, [for (var i = 0; i <= 40; i++) c + Offset(30 * math.cos(i / 40 * 2.05 * math.pi), 29 * math.sin(i / 40 * 2.05 * math.pi))]);
+    await t.pump(const Duration(milliseconds: 700));
+    final strokes = block['strokes'] as List;
+    expect((strokes.single as Map)['t'], 'ellipse');
   });
 }
